@@ -1,0 +1,14 @@
+[Unit]
+Description=VPS restic backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vps-backup run
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=5h
+TimeoutStopSec=90

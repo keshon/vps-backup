@@ -1,0 +1,23 @@
+# Example file-provider route: replace the hostname, entrypoint, resolver,
+# and bridge gateway IP with your deployment's values.
+http:
+  routers:
+    vps-backup:
+      rule: Host(`backup.example.com`)
+      entryPoints:
+        - https
+      service: vps-backup
+      tls:
+        certResolver: letsencrypt
+  services:
+    vps-backup:
+      loadBalancer:
+        serversTransport: vps-backup
+        servers:
+          - url: http://172.19.0.1:8787
+  serversTransports:
+    vps-backup:
+      forwardingTimeouts:
+        dialTimeout: 10s
+        responseHeaderTimeout: 15m
+        idleConnTimeout: 90s
