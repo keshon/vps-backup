@@ -12,7 +12,7 @@ while (($#)); do
         --bundle) bundle=${2:?Missing enrollment bundle}; shift 2 ;;
         --enable-timer) enable_timer=1; shift ;;
         --command-name) command_name=${2:?Missing command name}; shift 2 ;;
-        *) printf 'Usage: bash install.sh [--role client|server] [--bundle /path/to/bundle] [--enable-timer] [--command-name vps-backup-restic]\n' >&2; exit 2 ;;
+        *) printf 'Usage: bash install.sh [--role client|server] [--bundle /path/to/bundle] [--enable-timer] [--command-name NAME]\n' >&2; exit 2 ;;
     esac
 done
 [[ $EUID == 0 ]] || { echo 'Run as root.' >&2; exit 1; }
@@ -24,14 +24,14 @@ done
 command -v apt-get >/dev/null || { echo 'This installer supports Debian/Ubuntu.' >&2; exit 1; }
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -f $source_dir/vpsbackup/cli.py ]] || { echo 'Download the complete source directory first.' >&2; exit 1; }
-[[ ! -e /usr/local/lib/vps-backup-restic ]] || { echo 'Already installed; refusing to overwrite this version.' >&2; exit 1; }
+[[ ! -e /usr/local/lib/vps-backup ]] || { echo 'Already installed; refusing to overwrite this version.' >&2; exit 1; }
 [[ ! -e /usr/local/bin/$command_name ]] || { echo "/usr/local/bin/$command_name already exists; refusing to overwrite." >&2; exit 1; }
 packages=(python3 restic ca-certificates)
 [[ $role != server ]] || packages+=(apache2-utils curl)
 apt-get update
 apt-get install -y --no-install-recommends "${packages[@]}"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
-stage_dir=$(mktemp -d /usr/local/lib/.vps-backup-restic.XXXXXXXX)
+stage_dir=$(mktemp -d /usr/local/lib/.vps-backup.XXXXXXXX)
 wrapper_tmp=''
 cleanup() {
     [[ -z $stage_dir ]] || rm -rf -- "$stage_dir"
@@ -80,11 +80,11 @@ fi
 wrapper_tmp=$(mktemp /usr/local/bin/.vps-backup.XXXXXXXX)
 cat > "$wrapper_tmp" <<'EOF'
 #!/bin/sh
-export PYTHONPATH=/usr/local/lib/vps-backup-restic
+export PYTHONPATH=/usr/local/lib/vps-backup
 exec python3 -c 'from vpsbackup.cli import main; raise SystemExit(main())' "$@"
 EOF
 chmod 755 "$wrapper_tmp"
-mv -T -- "$stage_dir" /usr/local/lib/vps-backup-restic
+mv -T -- "$stage_dir" /usr/local/lib/vps-backup
 stage_dir=''
 mv -T -- "$wrapper_tmp" "/usr/local/bin/$command_name"
 wrapper_tmp=''

@@ -29,6 +29,8 @@ SHM, and rollback-journal files were excluded from the ordinary source copy.
 Apps configured to stop are restored under
 `/var/tmp/restore-review/var/lib/vps-backup/work/stopped/APP_ID/...`.
 These examples assume the default state directory.
+Older snapshots keep the paths used when they were taken, even if you later
+move the client's state directory. Check `snapshots` for those original paths.
 
 Check database copies with SQLite `PRAGMA integrity_check` and inspect expected
 application records. To restore production, stop all writers, copy the reviewed
@@ -59,9 +61,8 @@ separate directory. Do not reinitialize an existing repository.
 The installer refuses to overwrite `/usr/local/bin/vps-backup`. If a previous
 runner occupies this path, preserve its source, configuration, state, and
 pending archives before arranging a
-replacement command. A server-only gateway can coexist using the installer's
-`--command-name vps-backup-restic` option. Do not remove the old pending queue
-as installation cleanup.
+replacement. Preserve the old runtime and pending queue in a separate private
+directory before installing the new tool at the standard paths.
 
 Deploy the new gateway into a new remote prefix. Run a pilot with selected apps,
 perform a full data check and a database/file restore, and review Docker mounts

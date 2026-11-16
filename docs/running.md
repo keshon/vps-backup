@@ -12,12 +12,6 @@ directory, checking its archive against the release's HTTPS SHA256SUMS file.
 It leaves the system rclone binary unchanged. That checksum checks the download
 against the publisher's checksum; it is not an independently verified signature.
 
-For a server-only installation alongside the previous prototype, add
-`--command-name vps-backup-restic`. Administrative commands must then use that
-name, and the gateway service's `ExecStart` must match. Client timer templates
-continue to use the default `vps-backup` name. The alternate name does not
-overwrite the previous runner or migrate its configuration.
-
 Before writes, the gateway's installed binary must pass the built-in audit.
 Changing that binary invalidates the saved audit fingerprint. Ubuntu's tested
 rclone 1.60.1-DEV failed the path traversal check; 1.76.0 passed the fixture audit.
@@ -55,6 +49,9 @@ local HTTPS proxy, and restrict backend access to the intended bridge. The
 connection between that proxy and the gateway is plaintext on the local
 bridge. Targets still require HTTPS. Do not use this flag to expose a remote
 unencrypted hop.
+
+For the route-file commands and an HTTPS check, follow
+[Traefik setup](traefik.md). This is needed only on the backup server.
 
 4. Copy `systemd/vps-backup-gateway.service` to `/etc/systemd/system/`, then run:
 

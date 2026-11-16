@@ -125,7 +125,7 @@ def parser():
     gateway.add_argument("--tls-cert")
     gateway.add_argument("--tls-key")
     gateway.add_argument("--trusted-proxy", action="store_true", help="Allow HTTP on a private IP behind a local HTTPS proxy")
-    private_rclone = Path("/usr/local/lib/vps-backup-restic/bin/rclone")
+    private_rclone = Path("/usr/local/lib/vps-backup/bin/rclone")
     gateway.add_argument("--rclone-binary", default=str(private_rclone) if private_rclone.exists() else None)
     audit = commands.add_parser("audit-gateway", help="Test installed rclone against disposable local storage")
     audit.add_argument("--rclone-binary", default=str(private_rclone) if private_rclone.exists() else None)

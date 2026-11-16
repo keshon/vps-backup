@@ -7,6 +7,8 @@ The backup server can also run a client to back up its own folders.
 
 Follow [backup server setup](running.md#backup-server) to connect your cloud
 storage and HTTPS address. Once that works, repeat the steps below for each VPS.
+If you use Traefik in Docker, [install the HTTPS route](traefik.md) on that
+server as part of setup. Target VPS do not need this route.
 
 ## Add another VPS
 
@@ -131,14 +133,7 @@ For fully manual operation, also unpublish the n8n workflow. `schedule` manages
 only `vps-backup-client.timer`; it cannot edit n8n or disable older backup jobs.
 Disable the old job after verifying its replacement.
 
-For a custom installation, pass the command and config paths explicitly:
-
-```bash
-sudo /usr/local/bin/vps-backup-restic --config /etc/vps-backup-restic/client.json \
-  schedule --mode both --calendar 'Wed *-*-* 07:00:00 Europe/Moscow' \
-  --min-age-hours 20 --command /usr/local/bin/vps-backup-restic
-```
-
-Use the printed `n8n_command` in the SSH node. It includes the correct paths.
+The standard command reads `/etc/vps-backup/client.json` automatically.
+You only need `--config` when deliberately using a different configuration.
 [Configuration and troubleshooting](running.md) covers disk use, databases,
 and failure recovery.
