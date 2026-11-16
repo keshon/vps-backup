@@ -96,8 +96,6 @@ fi
 if ((enable_timer)); then
     [[ $role == client && -f /etc/vps-backup/client.json ]] || { echo 'Timer requires a configured client.' >&2; exit 1; }
     /usr/local/bin/vps-backup doctor
-    install -m 644 "$source_dir/systemd/vps-backup.service" "$source_dir/systemd/vps-backup.timer" /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable --now vps-backup.timer
+    /usr/local/bin/vps-backup schedule --mode systemd
 fi
 printf 'Installed %s. Timer enabled: %s. Gateway start is a separate step.\n' "$role" "$enable_timer"

@@ -1,0 +1,109 @@
+{
+  "name": "VPS Backup",
+  "active": false,
+  "nodes": [
+    {
+      "id": "592b6ac2-c178-4178-ab8c-6b371c5e7263",
+      "name": "Wednesday 05:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e4228494-cf19-4fb9-81d2-de1cba7ca651",
+      "name": "Run backup",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "/usr/local/bin/vps-backup --config /etc/vps-backup/client.json run --min-age-hours 20",
+        "cwd": "/"
+      }
+    },
+    {
+      "id": "386f8b8f-7a5e-421a-b780-d45af1a0a86b",
+      "name": "Validate backup result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const ssh = $input.first().json;\nif (ssh.code !== 0) throw new Error('Backup SSH command failed; inspect execution and target status');\nlet result;\ntry { result = JSON.parse(ssh.stdout); } catch { throw new Error('Backup returned invalid JSON'); }\nif (result.status !== 'success') throw new Error('Backup failed; inspect target status');\nreturn [{ json: result }];"
+      }
+    },
+    {
+      "id": "20dcce09-e990-4cbb-b889-a8e79ff9f03c",
+      "name": "Manual backup",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Wednesday 05:00": {
+      "main": [
+        [
+          {
+            "node": "Run backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run backup": {
+      "main": [
+        [
+          {
+            "node": "Validate backup result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual backup": {
+      "main": [
+        [
+          {
+            "node": "Run backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Moscow",
+    "executionOrder": "v1",
+    "executionTimeout": 3600
+  }
+}

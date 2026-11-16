@@ -63,7 +63,9 @@ age-based cloud cleanup outside restic would break shared data references.
 
 ## Scheduling
 
-Client systemd timers own unattended scheduling. n8n can start the same client
-command over SSH and monitor results. A per-VPS flock serializes this tool's
+Either n8n or systemd can schedule backups. Both can call the same client
+command with a recent-success window for fallback scheduling. `schedule.py`
+manages the local client timer; n8n schedules remain in n8n.
+A per-VPS flock serializes this tool's
 operations. It does not serialize the old Bash scripts or arbitrary manually
 invoked restic commands; keep those out of the same repository.

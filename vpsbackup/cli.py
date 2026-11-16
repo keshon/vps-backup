@@ -6,7 +6,7 @@ import re
 import signal
 import sys
 
-from . import __version__, client, server
+from . import __version__, client, server, schedule
 from .common import BackupError, absolute, atomic_json, locked, overlaps, private_json
 
 
@@ -93,7 +93,15 @@ def parser():
     cli.add_argument("--config", type=Path, default=Path("/etc/vps-backup/client.json"))
     commands = cli.add_subparsers(dest="action", required=True)
     commands.add_parser("doctor", help="Offline source and scratch-space checks")
-    commands.add_parser("run", help="Snapshot databases, back up apps, and check metadata")
+    run = commands.add_parser("run", help="Snapshot databases, back up apps, and check metadata")
+    run.add_argument("--min-age-hours", type=float, default=0,
+                     help="Skip if this backup scope succeeded within this many hours")
+    run.add_argument("--force", action="store_true", help="Ignore the recent-success guard")
+    scheduling = commands.add_parser("schedule", help="Configure local scheduling and print the n8n SSH command")
+    scheduling.add_argument("--mode", choices=("manual", "n8n", "systemd", "both"), required=True)
+    scheduling.add_argument("--calendar", default="*-*-* 06:00:00", help="systemd OnCalendar expression")
+    scheduling.add_argument("--min-age-hours", type=float, default=20)
+    scheduling.add_argument("--command", help="Absolute path to the installed client command")
     commands.add_parser("init", help="Initialize this client's remote repository once")
     commands.add_parser("snapshots", help="List remote snapshots")
     commands.add_parser("status", help="Read the saved last-run result without cloud access")
@@ -151,10 +159,12 @@ def main(argv=None):
                 server.serve(config)
         else:
             config = client.validate(private_json(args.config))
-            if args.action == "doctor":
+            if args.action == "schedule":
+                result = schedule.configure(args.config, args.mode, args.calendar, args.min_age_hours, args.command)
+            elif args.action == "doctor":
                 result = {"status": "success", "operation": "doctor", **client.doctor(config)}
             elif args.action == "run":
-                result = client.run(config)
+                result = client.run(config, args.min_age_hours, args.force)
             elif args.action == "status":
                 result = private_json(Path(config["state_dir"]) / "last-run.json")
             elif args.action == "restore":

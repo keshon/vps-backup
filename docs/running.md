@@ -1,4 +1,6 @@
-# Running VPS Backup
+# Configuration and troubleshooting
+
+For routine installation, start with [setup examples](setup.md).
 
 ## Requirements
 
@@ -122,12 +124,13 @@ For stopping containers, every writer of the app data must be named. SQLite
 snapshots are internally consistent; database contents and separately written
 application files are not guaranteed to represent one shared instant.
 
-If you omit `--enable-timer`, installation leaves scheduling disabled. To enable
-it later, install the client service and timer from `systemd/`, run
-`systemctl daemon-reload`, then `systemctl enable --now vps-backup.timer`.
-Its daily 04:00 schedule uses the VPS timezone, with up to 30 minutes of jitter.
-It catches up after downtime. Existing n8n schedules must be reconciled before
-you enable this timer; do not schedule the legacy and new runners together.
+If you omit `--enable-timer`, installation leaves scheduling disabled. With
+that flag, the installer uses `schedule --mode systemd`: daily at 06:00 in the
+VPS timezone, up to five minutes of random delay, a 20-hour recent-success
+window, and catch-up after downtime. It manages `vps-backup-client.timer`.
+See [setup examples](setup.md) for changing it or combining it with n8n.
+The older static templates under `systemd/vps-backup.*` use a different unit
+name. Do not enable both sets of timers.
 
 ## Ordinary commands
 
@@ -167,18 +170,27 @@ power loss, and host failure cannot execute cleanup; recovery happens on the
 next run, so external monitoring is still needed. Do not delete a stop journal
 without checking those containers.
 
-## n8n
+## Scheduling and n8n
 
-n8n can invoke `/usr/local/bin/vps-backup run` over its existing SSH credentials.
-Parse the SSH node's stdout as JSON and require both SSH exit code `0` and
-`status: "success"`. A transport or expression error must also take the failure
-path. Return the app IDs, snapshot IDs, and bytes added in a short notification;
-do not post the private client configuration or raw diagnostic logs.
+[Setup examples](setup.md#n8n-only) cover n8n, systemd, and fallback schedules.
+`run --min-age-hours N` skips after a successful backup of the same configured
+apps and repository within N hours. A plain `run` defaults to zero and always
+attempts a backup; `--force` bypasses an explicit guard.
+The check happens under the lock, after interrupted-run recovery and cleanup.
+A skip returns exit 0, `status: "success"`, `stage: "skipped"`, and `skipped: true`.
 
-The installed timer is the independent scheduler. n8n supplies manual runs and
-monitoring; it need not pass cloud credentials to targets. The client lock
-rejects overlapping manual and scheduled operations. Creating or publishing an
-n8n workflow is a separate deployment step; none is changed by the installer.
+`last-success.json` records the completion timestamp and configuration hash.
+Failed runs never update it. Missing, invalid, or future-dated history does
+not suppress a backup. `last-run.json` records the latest attempt, including
+skips; `status` reads that file. File changes inside an unchanged app
+configuration do not invalidate the time window.
+
+Keep the guard shorter than the backup interval. Allow enough time between
+primary and fallback schedules for a normal run to finish. Set n8n's execution
+timeout to cover the SSH command, within the maximum allowed by the instance.
+The template requires SSH exit code 0 and JSON `status: "success"`; transport,
+parsing, and backup failures fail the execution. It sends no notifications.
+Cloud credentials remain on the gateway.
 
 ## Failures
 

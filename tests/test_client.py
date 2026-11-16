@@ -43,6 +43,56 @@ class ClientTests(unittest.TestCase):
             return json.dumps({"message_type": "summary", "snapshot_id": "a" * 64, "data_added": 42}).encode()
         return b""
 
+    def test_guard_skips_without_refreshing_success_and_force_bypasses(self):
+        with patch.object(client, "restic", side_effect=self.success) as restic, patch.object(client.time, "time", return_value=100000):
+            self.assertEqual(client.run(self.config)["stage"], "complete")
+            marker = (self.state / "last-success.json").read_text()
+            restic.reset_mock()
+            with patch.object(client, "resume", wraps=client.resume) as resume:
+                result = client.run(self.config, min_age_hours=22)
+            self.assertTrue(result["skipped"])
+            resume.assert_called_once()
+            restic.assert_not_called()
+            self.assertEqual((self.state / "last-success.json").read_text(), marker)
+            self.assertEqual(client.run(self.config, min_age_hours=22, force=True)["stage"], "complete")
+            self.assertEqual(restic.call_count, 2)
+
+    def test_guard_runs_when_expired_scope_changed_or_clock_moves_back(self):
+        with patch.object(client, "restic", side_effect=self.success):
+            with patch.object(client.time, "time", return_value=100000):
+                client.run(self.config)
+            with patch.object(client.time, "time", return_value=200000):
+                self.assertEqual(client.run(self.config, 22)["stage"], "complete")
+            with patch.object(client.time, "time", return_value=190000):
+                self.assertEqual(client.run(self.config, 22)["stage"], "complete")
+            self.config["apps"][0]["sqlite"] = []
+            self.assertEqual(client.run(self.config, 22)["stage"], "complete")
+
+    def test_failed_check_does_not_create_success_marker(self):
+        with patch.object(client, "restic", side_effect=BackupError("offline")):
+            self.assertEqual(client.run(self.config, 22)["status"], "failed")
+        self.assertFalse((self.state / "last-success.json").exists())
+        with patch.object(client, "restic", side_effect=self.success):
+            self.assertEqual(client.run(self.config, 22)["stage"], "complete")
+
+    def test_guard_rejects_invalid_age(self):
+        for hours in (-1, float("nan"), float("inf")):
+            with self.assertRaises(BackupError):
+                client.run(self.config, hours)
+
+    def test_corrupt_history_does_not_skip(self):
+        self.state.mkdir()
+        (self.state / "last-success.json").write_text("broken JSON")
+        with patch.object(client, "restic", side_effect=self.success):
+            self.assertEqual(client.run(self.config, 20)["stage"], "complete")
+
+    def test_recovery_failure_takes_priority_over_recent_success(self):
+        with patch.object(client, "restic", side_effect=self.success):
+            client.run(self.config)
+        with patch.object(client, "resume", side_effect=BackupError("restart failed")), patch.object(client, "restic") as restic:
+            self.assertEqual(client.run(self.config, 20)["status"], "failed")
+        restic.assert_not_called()
+
     def test_low_space_refuses_before_backup_and_cleans_stale_work(self):
         (self.state / "work").mkdir(parents=True)
         (self.state / "work" / "old").write_text("stale")

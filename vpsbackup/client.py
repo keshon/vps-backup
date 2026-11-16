@@ -1,4 +1,6 @@
 import contextlib
+import hashlib
+import math
 import json
 import os
 from pathlib import Path
@@ -192,8 +194,32 @@ def stage_stopped(source, target, state, reserve):
             os.chown(path, info.st_uid, info.st_gid, follow_symlinks=False)
 
 
-def run(config):
+def backup_scope(config):
+    # Credentials and schedule settings do not change what a snapshot covers.
+    scope = {key: config[key] for key in ("server_id", "repository", "apps")}
+    return hashlib.sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()
+
+
+def recent_success(config, state, hours):
+    path = state / "last-success.json"
+    if not hours or not path.exists():
+        return None
+    from .common import private_json
+    try:
+        saved = private_json(path)
+        age = time.time() - saved["completed_at"]
+        if saved["scope"] == backup_scope(config) and 0 <= age < hours * 3600:
+            return saved
+    except (BackupError, ValueError, KeyError, TypeError):
+        # Missing or damaged history must never suppress a backup.
+        pass
+    return None
+
+
+def run(config, min_age_hours=0, force=False):
     validate(config)
+    if not math.isfinite(min_age_hours) or min_age_hours < 0:
+        raise BackupError("Minimum age must be a finite number >= 0")
     state = Path(config["state_dir"])
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     result = {"server_id": config["server_id"], "status": "failed", "stage": "preflight", "apps": []}
@@ -202,6 +228,11 @@ def run(config):
             # Recovery must run before preflight, which may itself fail.
             resume(state)
             clean_work(state)
+            saved = None if force else recent_success(config, state, min_age_hours)
+            if saved:
+                result.update(status="success", stage="skipped", skipped=True,
+                              reason="recent-success", last_success_at=saved["completed_at"])
+                return result
             result["space"] = doctor(config)
             work = state / "work"
             work.mkdir(mode=0o700)
@@ -247,5 +278,9 @@ def run(config):
             except Exception as exc:
                 result.update(status="failed", cleanup_error=type(exc).__name__)
             result["temporary_files_cleaned"] = not (state / "work").exists()
+            if result["status"] == "success" and not result.get("skipped"):
+                result["completed_at"] = time.time()
+                atomic_json(state / "last-success.json", {
+                    "completed_at": result["completed_at"], "scope": backup_scope(config)})
             atomic_json(state / "last-run.json", result)
     return result
