@@ -210,11 +210,20 @@ server, run `sudo vps-backup --config /etc/vps-backup/server.json cloud-space`.
 
 ## Failures
 
-For a nonzero restic exit, inspect the root-only
-`/var/lib/vps-backup/last-error.log` on the target; it contains the last 64 KiB of
-stderr from the failed command. It can include private paths and is not sent
-to n8n. It remains until a later failure replaces it, so compare it with the
-current saved run. Timeouts and launch failures have no stderr log.
+On the target VPS, run `sudo vps-backup logs` to read the latest command failure.
+With the default state directory, the private file is
+`/var/lib/vps-backup/last-error.log`. It records the program, exit code and last
+64 KiB each of stdout and stderr. Separate copies under
+`/var/lib/vps-backup/errors/` preserve earlier failures when you retry. These
+files can include private paths; their contents are not sent to n8n. Timeouts
+and launch failures do not create these command logs, so compare the log with
+`vps-backup status`.
+
+Restic exit 11 means it could not acquire the repository lock. Check the host
+and process named in the log before attempting recovery. Do not delete cloud
+lock files while an operation may still be running. A metadata check failure
+after uploads needs its own log: successfully uploaded snapshots do not establish
+that the repository passed verification.
 
 For insufficient disk space, run `preflight` and check the filesystem's current use.
 Do not remove cloud snapshots to solve a target's scratch-space problem.

@@ -163,6 +163,11 @@ def setup(path, remote, rclone_config, public_url, listen, tls_cert=None, tls_ke
 
 
 def enroll(config, server_id):
+    if any(not isinstance(config.get(field), str) or not config[field]
+           for field in ("clients_dir", "htpasswd", "public_url")):
+        raise BackupError("Enrollment needs the backup SERVER configuration, not a client recovery key.\n"
+                          "Run on the backup server:\n"
+                          "  vps-backup enroll --config /etc/vps-backup/server.json --id " + server_id)
     if not ID.fullmatch(server_id):
         raise BackupError("Invalid server ID")
     folder = Path(config["clients_dir"])

@@ -62,6 +62,7 @@ def parser():
     storage = commands.add_parser("storage", help="Choose the backup storage format")
     storage.add_argument("mode", choices=("restic", "archive"))
     commands.add_parser("status", help="Show the last backup result without contacting the cloud")
+    commands.add_parser("logs", help="Show the last failure with its actual diagnostic message")
     apps = commands.add_parser("apps", help="Show or change included folders")
     apps.add_argument("--select", action="store_true", help="Choose folders again; keeps the old selection unless you save")
     apps.add_argument("--base", type=Path, default=Path("/opt/dockers"))
@@ -155,7 +156,7 @@ def main(argv=None):
             if args.action == "init" and not args.config.exists():
                 raise BackupError("There is no client configuration yet. init only prepares cloud storage.\n"
                                   "Start with: vps-backup setup\nSetup creates client.json from your recovery key.")
-            if args.action in ("snapshots", "export"):
+            if args.action in ("snapshots", "export", "logs"):
                 config = onboarding.read_config(args.bundle or args.config, "recovery key" if args.bundle else "configuration")
                 if args.bundle:
                     workspace = tempfile.TemporaryDirectory(prefix="vps-backup-recovery-")
@@ -181,6 +182,13 @@ def main(argv=None):
                     result = {"status": "success", "operation": "status", "last_run": previous} if human else previous
                 else:
                     result = {"status": "success", "operation": "status", "never_run": True}
+            elif args.action == "logs":
+                log = Path(config["state_dir"]) / "last-error.log"
+                if not log.is_file():
+                    raise BackupError("No saved subprocess failure log exists at " + str(log) + ".\n"
+                                      "Run vps-backup status for the last attempt. Older versions did not log timeouts or launch failures.")
+                result = {"status": "success", "operation": "logs", "path": str(log),
+                          "text": log.read_text(errors="replace")[-131072:]}
             elif args.action == "apps":
                 if args.select:
                     onboarding.select_apps(config, args.config, args.base)
@@ -235,7 +243,7 @@ def main(argv=None):
     finally:
         if workspace is not None:
             workspace.cleanup()
-    readable = human or (args.action in ("snapshots", "export") and not args.json)
+    readable = human or (args.action in ("snapshots", "export", "logs") and not args.json)
     if readable:
         if result["status"] != "success":
             print(presentation.error_text(result.get("error", "The command could not complete"), args.config), file=sys.stderr)

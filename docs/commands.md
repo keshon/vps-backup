@@ -10,6 +10,7 @@ your account cannot read the private configuration.
 | Check this VPS before backing up | `vps-backup preflight` | Checks folders, database sizes, required programs and local space; no cloud access |
 | Back up now | `vps-backup backup` | Takes consistent copies, uploads, verifies metadata, and cleans temporary files |
 | See the last result | `vps-backup status` | Reads local history; does not check the cloud or create a backup |
+| Understand a failure | `vps-backup logs` | Reads the private log, including the backup engine's stdout and stderr |
 | See saved backups | `vps-backup list` | Lists cloud snapshots by app and date |
 | Download normal files | `vps-backup export --app APP_ID` | Assembles a `.tar.gz`; never overwrites an existing archive |
 | Check stored backups | `vps-backup verify` | Contacts storage and checks integrity; can take several minutes |
@@ -36,7 +37,7 @@ use `/etc/vps-backup/client.json`. `--config PATH` overrides either default.
 
 In a terminal, results are readable summaries and progress appears on stderr.
 Use `--json` for scripts. Redirected/non-terminal output retains JSON by default
-for operational commands; `list` and `export` keep their existing readable default
+for operational commands; `list`, `export` and `logs` keep their readable default
 unless `--json` is supplied. Setup prompts and diagnostics stay on stderr.
 
 Existing automation names remain accepted: `run` means `backup`, `snapshots`

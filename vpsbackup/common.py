@@ -118,9 +118,17 @@ def execute(args, *, env=None, timeout=3600, space=None, input_data=None, diagno
                         if time.monotonic() - started > timeout:
                             raise BackupError(Path(args[0]).name + " timed out")
                 if process.returncode:
+                    message = Path(args[0]).name + " failed (exit " + str(process.returncode) + ")"
                     if diagnostics:
-                        atomic_text(diagnostics, errors[-65536:].decode(errors="replace"))
-                    raise BackupError(Path(args[0]).name + " failed (exit " + str(process.returncode) + ")")
+                        diagnostics = Path(diagnostics)
+                        history = diagnostics.parent / "errors" / (str(time.time_ns()) + ".log")
+                        report = ("Program: " + Path(args[0]).name + "\nExit code: " + str(process.returncode)
+                                  + "\n\nStandard output:\n" + output[-65536:].decode(errors="replace")
+                                  + "\n\nStandard error:\n" + errors[-65536:].decode(errors="replace"))
+                        atomic_text(history, report)
+                        atomic_text(diagnostics, report)
+                        message += "\nDetails: " + str(diagnostics) + "\nSaved failure: " + str(history)
+                    raise BackupError(message)
                 if len(output) > 16 * MIB:
                     raise BackupError("Command output exceeded 16 MiB")
                 return output

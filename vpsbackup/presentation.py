@@ -2,13 +2,14 @@
 import argparse
 from datetime import datetime
 import difflib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 GROUPS = (
     ("Getting started", (("setup", "Connect this VPS using its recovery key; safe to retry"),
                          ("preflight", "Check local folders and free space; does not contact the cloud"))),
     ("Everyday use", (("backup", "Save a backup now"), ("status", "Show the last backup result; does not verify stored data"),
+                      ("logs", "Read the last failure, including the backup engine's message"),
                       ("list", "Show saved backups"), ("export", "Download a backup as a normal .tar.gz"),
                       ("verify", "Read and check stored backup metadata (or --read-data for all data)"),
                       ("apps", "Show or change the folders included in backups"))),
@@ -92,8 +93,14 @@ def error_text(message, config_path):
     elif "configure at least one app" in lower:
         text += "\n\nhelp: The recovery key is present, but no folders have been chosen.\n  vps-backup setup"
     elif "restic failed" in lower:
-        text += "\n\nhelp: Read the private diagnostics on this VPS, then check access to the backup server.\n"
-        text += "      The log is under state_dir/last-error.log in " + str(config_path) + "."
+        if "exit 11" in lower:
+            text += "\n\nRestic could not acquire the cloud repository lock. Another operation may be running,\n"
+            text += "or an earlier operation left a stale lock. The log identifies the holder."
+        elif "exit 12" in lower:
+            text += "\n\nThe repository password was rejected. Use the original recovery key for these backups."
+        elif "exit 10" in lower:
+            text += "\n\nThe cloud repository was not found. Run vps-backup setup to check the connection."
+        text += "\n\nhelp: Read the actual failure on this VPS:\n  vps-backup logs"
     elif "cannot run restic" in lower or "install restic" in lower:
         text += "\n\nhelp: On Debian/Ubuntu, install the backup engine, then retry:\n  sudo apt install restic"
     return text
@@ -125,10 +132,15 @@ def human_result(result):
         text = "Local timer: " + ("enabled · " + result["calendar"] if result["timer_enabled"] else "disabled")
         return text + "\n\nn8n SSH command:\n  " + result["n8n_command"] + "\n\n" + result["note"]
     if operation == "enroll":
+        target = PurePosixPath("/etc/vps-backup") / Path(result["bundle"]).name
         return ("Recovery key created: " + result["bundle"] + "\n\n"
-                "Copy this file to the target VPS, then run there:\n"
-                "  vps-backup setup --bundle /path/to/" + Path(result["bundle"]).name + "\n"
+                "Copy this file to the TARGET VPS as " + str(target) + ".\n"
+                "Then run these commands on the target:\n"
+                "  chmod 600 " + str(target) + "\n"
+                "  vps-backup setup --bundle " + str(target) + "\n"
                 "Keep a private copy off the backup server. It is needed for recovery.")
+    if operation == "logs":
+        return "Last failure: " + result["path"] + "\n\n" + result["text"]
     if operation == "cloud-space":
         return "Cloud pool\n" + "\n".join("  " + label + ": " + size(result.get(field + "_bytes")) for field, label in (("free", "Free"), ("used", "Used"), ("total", "Total")))
     if operation == "check":
