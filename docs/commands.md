@@ -11,6 +11,7 @@ your account cannot read the private configuration.
 | Back up now | `vps-backup backup` | Takes consistent copies, uploads, verifies metadata, and cleans temporary files |
 | See the last result | `vps-backup status` | Reads local history; does not check the cloud or create a backup |
 | Understand a failure | `vps-backup logs` | Reads the private log, including the backup engine's stdout and stderr |
+| Clear abandoned restic locks | `vps-backup unlock` | Uses restic's stale-lock detection under the local operation lock; never forces removal |
 | See saved backups | `vps-backup list` | Lists cloud snapshots by app and date |
 | Download normal files | `vps-backup export --app APP_ID` | Assembles a `.tar.gz`; never overwrites an existing archive |
 | Check stored backups | `vps-backup verify` | Contacts storage and checks integrity; can take several minutes |

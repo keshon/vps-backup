@@ -5,12 +5,25 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from vpsbackup import cli, presentation, server
 from vpsbackup.common import BackupError, atomic_json, execute
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_unlock_uses_local_lock_and_never_forces_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = {'state_dir': directory, 'storage_mode': 'restic'}
+            with patch.object(cli.onboarding, 'read_config', return_value=config), \
+                 patch.object(cli.client, 'validate', return_value=config), \
+                 patch.object(cli, 'locked', return_value=contextlib.nullcontext()) as lock, \
+                 patch.object(cli.client, 'restic') as restic, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(['unlock', '--json']), 0)
+            lock.assert_called_once_with(Path(directory) / 'run.lock')
+            restic.assert_called_once_with(config, 'unlock')
+
     def test_failures_preserve_stdout_stderr_and_the_previous_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / 'last-error.log'

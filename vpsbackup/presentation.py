@@ -10,6 +10,7 @@ GROUPS = (
                          ("preflight", "Check local folders and free space; does not contact the cloud"))),
     ("Everyday use", (("backup", "Save a backup now"), ("status", "Show the last backup result; does not verify stored data"),
                       ("logs", "Read the last failure, including the backup engine's message"),
+                      ("unlock", "Remove abandoned restic locks using its stale-lock check"),
                       ("list", "Show saved backups"), ("export", "Download a backup as a normal .tar.gz"),
                       ("verify", "Read and check stored backup metadata (or --read-data for all data)"),
                       ("apps", "Show or change the folders included in backups"))),
@@ -145,6 +146,9 @@ def human_result(result):
         return "Cloud pool\n" + "\n".join("  " + label + ": " + size(result.get(field + "_bytes")) for field, label in (("free", "Free"), ("used", "Used"), ("total", "Total")))
     if operation == "check":
         return "Stored backup verification passed."
+    if operation == "unlock":
+        return ("Restic stale-lock cleanup completed. Active locks were not force-removed.\n"
+                "This did not verify stored data. Next:\n  vps-backup verify")
     if operation == "init":
         return "The cloud repository is ready.\nNext:\n  vps-backup backup"
     if operation == "storage":

@@ -225,6 +225,12 @@ lock files while an operation may still be running. A metadata check failure
 after uploads needs its own log: successfully uploaded snapshots do not establish
 that the repository passed verification.
 
+On the affected target VPS, run `sudo vps-backup unlock` to ask restic to remove
+stale locks, then `sudo vps-backup verify`. This uses the configured credentials
+and refuses to overlap another local backup or verification. It does not use
+`--remove-all` or force active locks away. A successful unlock is not an integrity
+check; if verification still fails, read `sudo vps-backup logs`.
+
 For insufficient disk space, run `preflight` and check the filesystem's current use.
 Do not remove cloud snapshots to solve a target's scratch-space problem.
 For gateway errors, inspect `journalctl -u vps-backup-gateway` on the server and

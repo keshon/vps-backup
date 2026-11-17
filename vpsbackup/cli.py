@@ -63,6 +63,7 @@ def parser():
     storage.add_argument("mode", choices=("restic", "archive"))
     commands.add_parser("status", help="Show the last backup result without contacting the cloud")
     commands.add_parser("logs", help="Show the last failure with its actual diagnostic message")
+    commands.add_parser("unlock", help="Ask restic to remove stale repository locks; never forces active locks")
     apps = commands.add_parser("apps", help="Show or change included folders")
     apps.add_argument("--select", action="store_true", help="Choose folders again; keeps the old selection unless you save")
     apps.add_argument("--base", type=Path, default=Path("/opt/dockers"))
@@ -216,6 +217,8 @@ def main(argv=None):
                 state = Path(config["state_dir"])
                 state.mkdir(parents=True, exist_ok=True, mode=0o700)
                 with locked(state / "run.lock"):
+                    if args.action == "unlock" and config.get("storage_mode") == "archive":
+                        raise BackupError("Archive mode does not use restic repository locks.")
                     if config.get("storage_mode") == "archive":
                         saved = archive.snapshots(config)
                         if args.action == "check":

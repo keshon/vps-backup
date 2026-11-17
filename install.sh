@@ -172,7 +172,7 @@ if [[ $role == client && $install_only == 0 ]]; then
         printf '\nScheduling was not changed. Back up now with: vps-backup backup\n'
     fi
 elif [[ $role == client ]]; then
-    printf 'Setup is still needed. Run: vps-backup setup --config %q\n' "$config"
+    printf 'Configuration and schedules were not changed.\nIf this VPS needs setup, run: vps-backup setup --config %q\n' "$config"
 else
     printf 'Gateway commands are ready. Next: %s setup-server --help\n' "$command_name"
 fi
