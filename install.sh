@@ -5,14 +5,16 @@ umask 077
 role=client
 bundle=''
 enable_timer=0
+storage_mode=restic
 command_name=vps-backup
 while (($#)); do
     case "$1" in
         --role) role=${2:?Missing role}; shift 2 ;;
         --bundle) bundle=${2:?Missing enrollment bundle}; shift 2 ;;
+        --storage-mode) storage_mode=${2:?Missing storage mode}; shift 2 ;;
         --enable-timer) enable_timer=1; shift ;;
         --command-name) command_name=${2:?Missing command name}; shift 2 ;;
-        *) printf 'Usage: bash install.sh [--role client|server] [--bundle /path/to/bundle] [--enable-timer] [--command-name NAME]\n' >&2; exit 2 ;;
+        *) printf 'Usage: bash install.sh [--role client|server] [--bundle /path/to/bundle] [--enable-timer] [--storage-mode restic|archive] [--command-name NAME]\n' >&2; exit 2 ;;
     esac
 done
 [[ $EUID == 0 ]] || { echo 'Run as root.' >&2; exit 1; }
@@ -21,6 +23,7 @@ done
 [[ $command_name == vps-backup || ( $role == server && -z $bundle && $enable_timer == 0 ) ]] || { echo 'Alternate command names are supported for server-only installs.' >&2; exit 1; }
 [[ -z $bundle || $role == client ]] || { echo '--bundle applies only to clients.' >&2; exit 1; }
 [[ $enable_timer == 0 || ( $role == client && -n $bundle ) ]] || { echo '--enable-timer requires --bundle on a new client.' >&2; exit 1; }
+[[ $storage_mode == restic || $storage_mode == archive ]] || { echo "Unknown storage mode." >&2; exit 1; }
 command -v apt-get >/dev/null || { echo 'This installer supports Debian/Ubuntu.' >&2; exit 1; }
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -f $source_dir/vpsbackup/cli.py ]] || { echo 'Download the complete source directory first.' >&2; exit 1; }
@@ -91,7 +94,7 @@ wrapper_tmp=''
 install -d -m 700 /etc/vps-backup /var/lib/vps-backup
 if [[ -n $bundle ]]; then
     [[ $role == client ]] || { echo '--bundle applies only to clients.' >&2; exit 1; }
-    /usr/local/bin/vps-backup setup-client --bundle "$bundle" --initialize
+    /usr/local/bin/vps-backup setup-client --bundle "$bundle" --initialize --storage-mode "$storage_mode"
 fi
 if ((enable_timer)); then
     [[ $role == client && -f /etc/vps-backup/client.json ]] || { echo 'Timer requires a configured client.' >&2; exit 1; }

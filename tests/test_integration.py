@@ -15,6 +15,8 @@ import urllib.request
 
 from vpsbackup import client, server
 from vpsbackup.cli import restore
+from vpsbackup import recovery
+import tarfile
 from vpsbackup.common import atomic_json, atomic_text, private_json, terminate
 
 
@@ -86,6 +88,30 @@ class GatewayRoundtrip(unittest.TestCase):
                         with contextlib.closing(sqlite3.connect(snapshot_db)) as db:
                             self.assertEqual(db.execute("SELECT value FROM items").fetchall(), [("committed WAL row",)])
                             self.assertEqual(db.execute("PRAGMA integrity_check").fetchone(), ("ok",))
+                        client.restic(bundle, "check", "--read-data")
+                        exported = root / "exported.tar.gz"
+                        recovery.export(bundle, snapshot, target=exported)
+                        with tarfile.open(exported) as tar:
+                            self.assertEqual(tar.extractfile("app/payload.bin").read(), payload)
+                            self.assertEqual(tar.extractfile("app/db.sqlite").read()[:16], b"SQLite format 3\x00")
+                            self.assertFalse(any("work/sqlite" in item.name for item in tar))
+                        native = dict(bundle, storage_mode="archive")
+                        first_archive = client.run(native)
+                        self.assertEqual(first_archive["status"], "success", first_archive)
+                        second_archive = client.run(native)
+                        self.assertEqual(second_archive["status"], "success", second_archive)
+                        self.assertTrue(second_archive["apps"][0]["unchanged"], second_archive)
+                        self.assertEqual(second_archive["apps"][0]["data_added"], 0)
+                        downloaded = root / "native.tar.gz"
+                        recovery.export(native, app="app", target=downloaded)
+                        with tarfile.open(downloaded) as tar:
+                            self.assertEqual(tar.extractfile("app/payload.bin").read(), payload)
+                        (source / "file-added").write_text("changed")
+                        changed = client.run(native)
+                        self.assertEqual(changed["status"], "success", changed)
+                        self.assertFalse(changed["apps"][0]["unchanged"])
+                        self.assertEqual(len(recovery.snapshots(native)), 2)
+                        # Native objects live in a separate subfolder and must not break restic.
                         client.restic(bundle, "check", "--read-data")
                         self.assertFalse((root / "state/work").exists())
                         if remote == "union:repositories":

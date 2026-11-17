@@ -7,6 +7,22 @@ password. An enrollment bundle has no Koofr credentials.
 
 ## Test a snapshot
 
+The simplest test works in both modes:
+
+```bash
+sudo vps-backup snapshots
+sudo vps-backup export --app melodix --to /var/tmp/melodix-review.tar.gz
+mkdir /var/tmp/restore-review
+tar -xzf /var/tmp/melodix-review.tar.gz -C /var/tmp/restore-review
+```
+
+Use your app ID and an unused destination. The archive has an `APP_ID/` root,
+with consistent SQLite copies in their original relative locations. Add
+`--snapshot HEX_ID` to choose a backup. To assemble it on Windows or Linux,
+use [the local helper](local-recovery.md).
+
+## Raw restic restore
+
 On a configured client:
 
 ```bash

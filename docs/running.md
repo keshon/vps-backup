@@ -5,7 +5,7 @@ For routine installation, start with [setup examples](setup.md).
 ## Requirements
 
 The installer supports Debian/Ubuntu, running as root. Clients need Python 3.10+
-and restic; a client configured to stop containers also needs Docker. The
+and restic for restic mode; a client configured to stop containers also needs Docker. The
 backup server needs Python, rclone, and `htpasswd`. The installer uses OS
 packages for Python/restic and downloads rclone 1.76.0 into the tool's private
 directory, checking its archive against the release's HTTPS SHA256SUMS file.
@@ -100,7 +100,7 @@ are not automatically classified. Review Docker mounts against the selected
 paths; discovery is a proposal, not a guarantee of complete coverage.
 
 Installation saves `/etc/vps-backup/client.json` privately and initializes the
-remote repository. It refuses to overwrite an existing client configuration or
+remote repository in restic mode. It refuses to overwrite an existing client configuration or
 repository. For automation, `setup-client --apps-file /root/apps.json` accepts
 an explicitly reviewed JSON app array; that input file must also have mode 600.
 Use `--base /another/parent` with `setup-client` to change discovery's root.
@@ -140,24 +140,38 @@ sudo vps-backup check --read-data
 ```
 
 `doctor` checks local configuration, required sources, SQLite sizes, and space;
-it makes no cloud requests. `run` saves one snapshot per app, then checks
-repository metadata. All requested app snapshots and that check must succeed
+it makes no cloud requests. In restic mode, `run` saves one snapshot per app, then checks
+repository metadata. In archive mode, each newly uploaded archive and manifest
+is read back and checksum-verified before success is recorded. Unchanged apps
+reuse their previous archive after checking that object's size and presence.
+All requested apps and the mode's checks must succeed
 for exit code 0. `status` reads the last saved result. An interrupted run may
 already have saved some app snapshots; there is no whole-server transaction.
 `check --read-data` downloads and verifies all stored packs and is more expensive
-than the metadata check. Backups never invoke `forget`, `prune`, or cloud delete.
+than the metadata check. Archive-mode `check` always downloads and verifies all
+archives, even without `--read-data`. Backups never invoke `forget`, `prune`, or cloud delete.
+
+`snapshots` displays a table; use `snapshots --json` for machine output.
+`export --app APP_ID --to /path/app.tar.gz` produces a normal archive in either
+mode. Add `--snapshot HEX_ID` to choose an older backup and `--json` for a machine
+result. See [local recovery](local-recovery.md) to do this on your computer.
+`run`, `status` and other operational commands retain JSON output for n8n.
 
 ## Disk use and interrupted runs
 
 Preflight requires twice the total logical SQLite database size and stopped-app
 copy size, plus a 32 MiB allowance and a configurable reserve. `reserve_mib`
 defaults to 512 and must be at least 64. Set it higher for busy filesystems.
-This is an estimate; other processes may consume space after it passes.
+Archive mode additionally budgets twice the logical size of all selected app
+files for archive creation. This is an estimate; other processes may consume space after it passes.
 
 Snapshots, stopped-app copies, and restic temporary files live under
 `/var/lib/vps-backup/work`. Free space is checked during SQLite copies and while
 restic runs. Stop-mode copies check space before each copied file. There is no
-full archive and no persistent restic cache. Ordinary files are read directly.
+full archive in restic mode and no persistent restic cache. Ordinary files are read directly.
+Archive mode builds its `.tar.gz` under `work`, hashing the bytes written to it.
+Changes to content, names, permissions, ownership or link targets count as changes;
+timestamps alone do not. A file detected changing during creation fails the backup.
 
 The work directory is removed after a run, including an upload failure. A later
 run cleans work left by a crash before creating new snapshots. Container stop
@@ -171,7 +185,7 @@ without checking those containers.
 
 [Setup examples](setup.md#n8n-only) cover n8n, systemd, and fallback schedules.
 `run --min-age-hours N` skips after a successful backup of the same configured
-apps and repository within N hours. A plain `run` defaults to zero and always
+apps, storage mode and repository within N hours. A plain `run` defaults to zero and always
 attempts a backup; `--force` bypasses an explicit guard.
 The check happens under the lock, after interrupted-run recovery and cleanup.
 A skip returns exit 0, `status: "success"`, `stage: "skipped"`, and `skipped: true`.

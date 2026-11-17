@@ -12,7 +12,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-from .common import BackupError, ID, absolute, atomic_json, atomic_text, execute, locked, private_json, terminate
+from .common import BackupError, ID, absolute, atomic_json, atomic_text, execute, locked, terminate
 
 
 def password_entry(username, password):

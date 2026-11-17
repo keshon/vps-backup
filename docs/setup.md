@@ -49,6 +49,28 @@ sudo vps-backup snapshots
 [Test a restore](recovery.md#test-a-snapshot) before relying on it.
 Then choose one of the following schedules.
 
+## Choose the storage format
+
+The default is `restic`: encrypted snapshots that upload changed chunks.
+For ordinary cloud archives instead, install with `--storage-mode archive` or
+switch an existing client on the target VPS:
+
+```bash
+sudo vps-backup storage archive
+sudo vps-backup run
+sudo vps-backup snapshots
+```
+
+Archive mode creates one `.tar.gz` per app and uploads it only when file contents
+or relevant metadata changed. It still builds the archive locally to compare it;
+allow room for that archive as well as any consistent copies. Cloud archives are
+readable without an encryption password.
+
+Switch back with `sudo vps-backup storage restic`. Switching preserves old backups
+and schedules. View older backups with `snapshots --mode restic` or
+`snapshots --mode archive`; export either using the same `--mode` option.
+[Local recovery](local-recovery.md) can list both modes together.
+
 ## Without n8n
 
 On the target VPS, run backups Wednesdays at 05:00 Moscow time:

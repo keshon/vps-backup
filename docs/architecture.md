@@ -20,6 +20,21 @@ outages, and full-sized application backups still need deployment validation.
 
 ## Ownership
 
+The flow above describes restic mode. Archive mode shares source preparation
+but builds an ordinary app-rooted `.tar.gz`, fingerprints its contents and relevant
+metadata, and uploads only when changed. Objects live under each client's
+`archives/data/`, with committed manifests under `archives/snapshots/`. Both use
+the authenticated append-only gateway; native archives are plaintext in storage.
+New uploads and manifests are read back and SHA256-verified before success.
+An interrupted upload may leave an unreferenced object; it cannot become a saved
+snapshot without a completed manifest. No automatic garbage collection runs.
+
+`archive.py` owns native encoding, change detection and gateway object access.
+`recovery.py` owns snapshot selection and portable exports for both modes.
+Restic exports stream through tar conversion into gzip without unpacking locally;
+archive exports download and verify the stored object. `recover.py` is the
+Windows/Linux entry point, using the same recovery operations as the VPS CLI.
+
 `client.py` owns source checks, scratch state, database snapshots, container
 recovery, and restic execution. Each app produces an independently addressable
 snapshot. SQLite copies and stopped-app copies have stable paths under `work`
@@ -32,7 +47,8 @@ The rclone binary's SHA256 is recorded only after its local behavior audit
 passes; serving refuses a different binary. A successful fixture audit is not
 a security certification of the binary or remote backend.
 
-`cli.py` owns setup and JSON command results. No credential values are printed
+`cli.py` owns setup and command presentation, including JSON results for automation
+and readable snapshot tables. No credential values are printed
 in normal results. Subprocesses receive restic secrets in environment variables,
 not command arguments. The client clears inherited restic/rclone overrides.
 Configuration and diagnostic files are private to root.

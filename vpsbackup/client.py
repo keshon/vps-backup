@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from .common import BackupError, ID, MIB, absolute, atomic_json, check_space, execute, locked, overlaps
 
 
-def validate(config):
+def validate_connection(config):
     if config.get("version") != 1 or not ID.fullmatch(config.get("server_id", "")):
         raise BackupError("Invalid config version or server_id")
     repository = config.get("repository", "")
@@ -31,6 +31,14 @@ def validate(config):
     reserve = config.get("reserve_mib", 512)
     if type(reserve) is not int or reserve < 64:
         raise BackupError("reserve_mib must be an integer >= 64")
+    return config
+
+
+def validate(config):
+    validate_connection(config)
+    if config.get("storage_mode", "restic") not in ("restic", "archive"):
+        raise BackupError("storage_mode must be restic or archive")
+    state = Path(config["state_dir"])
     apps = config.get("apps", [])
     if not apps:
         raise BackupError("Configure at least one app")
@@ -56,7 +64,7 @@ def validate(config):
     return config
 
 
-def restic(config, *arguments, monitor=True):
+def restic_command(config, arguments, repository=None):
     env = dict(os.environ)
     # Do not inherit backend overrides or a password command from an interactive shell.
     for key in list(env):
@@ -68,10 +76,15 @@ def restic(config, *arguments, monitor=True):
     temp = Path(config["state_dir"]) / "work" / "tmp"
     if temp.is_dir():
         env["TMPDIR"] = str(temp)
-    args = ["restic", "--repo", config["repository"], "--no-cache"]
+    args = [config.get("restic_binary", "restic"), "--repo", repository or config["repository"], "--no-cache"]
     if config.get("ca_file"):
         args += ["--cacert", config["ca_file"]]
     args += list(arguments)
+    return args, env
+
+
+def restic(config, *arguments, monitor=True, repository=None):
+    args, env = restic_command(config, arguments, repository)
     return execute(args, env=env, timeout=config.get("timeout_seconds", 14400),
                    space=(config["state_dir"], config.get("reserve_mib", 512) * MIB) if monitor else None,
                    diagnostics=Path(config["state_dir"]) / "last-error.log")
@@ -84,7 +97,7 @@ def database_size(path):
 
 def doctor(config):
     validate(config)
-    if not shutil.which("restic"):
+    if config.get("storage_mode", "restic") == "restic" and not shutil.which("restic"):
         raise BackupError("Install restic")
     state = Path(config["state_dir"])
     # Find the filesystem without creating anything during offline checks.
@@ -93,11 +106,14 @@ def doctor(config):
         disk = disk.parent
     snapshot_bytes = 0
     stopped_bytes = 0
+    archive_bytes = 0
     apps = []
     for app in config["apps"]:
         source = Path(app["path"])
         if not source.is_dir():
             raise BackupError("Required source missing: " + app["id"])
+        if config.get("storage_mode") == "archive":
+            archive_bytes += sum(p.stat().st_size for p in source.rglob("*") if p.is_file() and not p.is_symlink())
         for relative in app.get("sqlite", []):
             path = source / relative
             if not path.is_file():
@@ -109,7 +125,7 @@ def doctor(config):
             stopped_bytes += sum(p.stat().st_size for p in source.rglob("*") if p.is_file() and not p.is_symlink())
         apps.append({"id": app["id"], "path": str(source), "sqlite": app.get("sqlite", []),
                      "stop_containers": app.get("stop_containers", [])})
-    required = (snapshot_bytes + stopped_bytes) * 2 + config.get("reserve_mib", 512) * MIB + 32 * MIB
+    required = (snapshot_bytes + stopped_bytes + archive_bytes) * 2 + config.get("reserve_mib", 512) * MIB + 32 * MIB
     free = check_space(disk, required)
     return {"apps": apps, "snapshot_estimate_bytes": snapshot_bytes, "stopped_copy_estimate_bytes": stopped_bytes,
             "required_free_bytes": required,
@@ -197,6 +213,7 @@ def stage_stopped(source, target, state, reserve):
 def backup_scope(config):
     # Credentials and schedule settings do not change what a snapshot covers.
     scope = {key: config[key] for key in ("server_id", "repository", "apps")}
+    scope["storage_mode"] = config.get("storage_mode", "restic")
     return hashlib.sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()
 
 
@@ -259,6 +276,11 @@ def run(config, min_age_hours=0, force=False):
                     if app.get("sqlite"):
                         args += [str(snapshot_root)]
                 item["stage"] = "backup"
+                if config.get("storage_mode") == "archive":
+                    from . import archive
+                    item.update(archive.save(config, app, source, snapshot_root))
+                    item.update(status="success", stage="unchanged" if item["unchanged"] else "saved")
+                    continue
                 records = restic(config, *args).decode().splitlines()
                 summaries = [json.loads(line) for line in records if line.strip()]
                 summary = next((r for r in reversed(summaries) if r.get("message_type") == "summary"), None)
@@ -268,7 +290,8 @@ def run(config, min_age_hours=0, force=False):
                             data_added=summary.get("data_added", 0), total_bytes=summary.get("total_bytes_processed", 0))
             result["stage"] = "check"
             # Check repository metadata after all app snapshots, without deleting anything.
-            restic(config, "check")
+            if config.get("storage_mode", "restic") == "restic":
+                restic(config, "check")
             result.update(status="success", stage="complete")
         except Exception as exc:
             result["error"] = str(exc) if isinstance(exc, BackupError) else type(exc).__name__

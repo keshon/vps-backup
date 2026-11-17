@@ -12,3 +12,5 @@ rclone.conf
 client.json
 server.json
 htpasswd
+*.tar.gz
+*.tar
