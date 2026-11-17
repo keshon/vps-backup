@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+export PYTHONDONTWRITEBYTECODE=1
 
 role=client
 bundle=''
