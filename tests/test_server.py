@@ -9,6 +9,24 @@ from vpsbackup import server
 from vpsbackup.common import BackupError, atomic_text, private_json
 
 
+class CloudSpaceTests(unittest.TestCase):
+    def test_capacity_is_read_from_server_and_missing_fields_stay_unknown(self):
+        config = {"rclone_binary": "rclone", "rclone_config": "private.conf", "remote": "union:backups"}
+        with patch.object(server, "execute", return_value=b'{"total":100,"free":30}') as execute:
+            result = server.cloud_space(config)
+        self.assertEqual(result["free_bytes"], 30)
+        self.assertNotIn("used_bytes", result)
+        self.assertIn("private.conf", execute.call_args.args[0])
+        self.assertFalse(any(key.startswith("RCLONE_") for key in execute.call_args.kwargs["env"]))
+
+    def test_invalid_or_unsupported_capacity_fails(self):
+        config = {"rclone_binary": "rclone", "rclone_config": "private.conf", "remote": "union:backups"}
+        for raw in (b'{}', b'[]', b'{"free":-1}', b'{"free":true}', b'not json'):
+            with self.subTest(raw=raw), patch.object(server, "execute", return_value=raw):
+                with self.assertRaises(BackupError):
+                    server.cloud_space(config)
+
+
 class EnrollmentTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

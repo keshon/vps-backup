@@ -146,6 +146,7 @@ def parser():
     audit = commands.add_parser("audit-gateway", help="Test installed rclone against disposable local storage")
     audit.add_argument("--rclone-binary", default=str(private_rclone) if private_rclone.exists() else None)
     commands.add_parser("gateway", help="Run authenticated append-only rclone gateway")
+    commands.add_parser("cloud-space", help="Read cloud capacity using the backup server configuration")
     enroll = commands.add_parser("enroll", help="Create per-VPS authentication and recovery bundle")
     enroll.add_argument("--id", required=True)
     return cli
@@ -170,10 +171,12 @@ def main(argv=None):
                                   args.listen, args.tls_cert, args.tls_key, args.rclone_binary, args.trusted_proxy)
         elif args.action == "setup-client":
             result = setup_client(args.bundle, args.config, args.base, args.apps_file, args.initialize, args.storage_mode)
-        elif args.action in ("enroll", "gateway"):
+        elif args.action in ("enroll", "gateway", "cloud-space"):
             config = private_json(args.config)
             if args.action == "enroll":
                 result = server.enroll(config, args.id)
+            elif args.action == "cloud-space":
+                result = server.cloud_space(config)
             else:
                 server.serve(config)
         else:

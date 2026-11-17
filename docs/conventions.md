@@ -9,6 +9,7 @@ python3 -m unittest discover -s tests -v
 python3 -m compileall -q vpsbackup recover.py
 bash -n install.sh
 sh -n recover.sh
+node --test tests/test_notifications.cjs
 ```
 
 `test_integration.py` runs when Linux, restic, rclone, and htpasswd are available;
@@ -22,6 +23,10 @@ checks that unchanged content reuses the saved archive, and exports its bytes.
 Unit tests cover invalid manifests, checksum failures and export cleanup after a
 disk-reserve failure. These checks are local commands; no CI workflow currently
 runs them automatically.
+The optional Node.js check executes the actual code embedded in the n8n template
+with fixtures. It checks completion/skip summaries, HTML escaping, message limits,
+capacity failures and credential-free independent notification branches. Node.js
+is needed for this development check, not for the VPS client.
 By default it never reads production configuration or connects to Koofr.
 An explicit cloud test can set `VPS_BACKUP_TEST_REMOTE` to a new
 `REMOTE:vps-backup-validation-*` prefix and `VPS_BACKUP_TEST_RCLONE_CONFIG` to

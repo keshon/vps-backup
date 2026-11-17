@@ -2,6 +2,7 @@ import base64
 import hashlib
 import http.client
 import ipaddress
+import json
 import os
 from pathlib import Path
 import secrets
@@ -13,6 +14,31 @@ import time
 from urllib.parse import urlsplit
 
 from .common import BackupError, ID, absolute, atomic_json, atomic_text, execute, locked, terminate
+
+
+def cloud_space(config):
+    rclone = config.get("rclone_binary") or shutil.which("rclone")
+    if not rclone:
+        raise BackupError("Install rclone on the backup server")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("RCLONE_")}
+    raw = execute([rclone, "--config", config["rclone_config"], "about", config["remote"], "--json"],
+                  env=env, timeout=60)
+    try:
+        reported = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise BackupError("Invalid cloud capacity response") from exc
+    if not isinstance(reported, dict):
+        raise BackupError("Invalid cloud capacity response")
+    result = {"status": "success", "operation": "cloud-space"}
+    for field in ("total", "used", "free"):
+        value = reported.get(field)
+        if value is not None:
+            if type(value) is not int or value < 0:
+                raise BackupError("Invalid cloud capacity value")
+            result[field + "_bytes"] = value
+    if not any(field + "_bytes" in result for field in ("total", "used", "free")):
+        raise BackupError("Cloud provider did not report capacity")
+    return result
 
 
 def password_entry(username, password):

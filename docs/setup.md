@@ -113,7 +113,8 @@ The template runs Wednesdays at 05:00, with the workflow timezone set to
 `Europe/Moscow`. Change the Schedule Trigger or timezone if needed, then
 publish it. **Validate backup result** checks the SSH exit code and JSON status.
 A skipped recent backup counts as success. SSH or backup failures fail the
-execution; the template sends no alerts.
+execution. [Optional Discord and Telegram notifications](n8n.md#discord-and-telegram)
+report successful or skipped runs; both start disabled in the template.
 
 The manual trigger uses the same guard. For an immediate additional backup,
 use `run --force` on the VPS.

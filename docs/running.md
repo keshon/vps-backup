@@ -200,8 +200,10 @@ Keep the guard shorter than the backup interval. Allow enough time between
 primary and fallback schedules for a normal run to finish. Set n8n's execution
 timeout to cover the SSH command, within the maximum allowed by the instance.
 The template requires SSH exit code 0 and JSON `status: "success"`; transport,
-parsing, and backup failures fail the execution. It sends no notifications.
-Cloud credentials remain on the gateway.
+parsing, and backup failures fail the execution. Optional independent Discord
+and Telegram completion messages are described in [the n8n guide](n8n.md).
+Cloud credentials remain on the gateway. For a read-only capacity check on that
+server, run `sudo vps-backup --config /etc/vps-backup/server.json cloud-space`.
 
 ## Failures
 
