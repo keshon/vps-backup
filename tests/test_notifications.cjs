@@ -79,3 +79,19 @@ test('template has independently disabled parallel destinations and no credentia
   }
   assert.ok(workflow.nodes.every(node => !node.credentials));
 });
+
+test('Discord embed groups status, apps and capacity within platform limits', () => {
+  const completed = report(saved);
+  const skipped = report({ ...saved, apps: [], skipped: true, last_success_at: 1794916800 });
+  assert.notEqual(completed.discordEmbed.color, skipped.discordEmbed.color);
+  assert.match(skipped.discordEmbed.title, /Already backed up/);
+  assert.match(skipped.discordEmbed.description, /No new snapshot/);
+  const cloud = completed.discordEmbed.fields.find(field => field.name.startsWith('Cloud storage'));
+  assert.match(cloud.value, /[■□]{12}/);
+  assert.match(cloud.value, /26% used/);
+  const large = report({ ...saved, apps: Array.from({ length: 100 }, () => ({ ...saved.apps[0], id: 'a'.repeat(63) })) });
+  assert.ok(large.discordEmbed.fields.every(field => field.value.length <= 1024));
+  assert.ok(large.telegramMessage.length <= 4096);
+  assert.match(large.telegramMessage, /<b>.*Backup complete/);
+  assert.ok(!report(saved, { code: 1 }).discordEmbed.fields.at(-1).value.includes('■'));
+});

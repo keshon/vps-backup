@@ -45,6 +45,10 @@ Messages show the VPS, completion time in Moscow, apps, snapshot IDs, newly
 uploaded bytes, temporary-file cleanup and cloud capacity. A recent-success skip
 is clearly marked and shows the previous successful backup time. No new snapshot
 is claimed for a skipped run. New uploaded data is not the total restorable size.
+Discord uses a coloured embed with grouped fields and a cloud usage bar;
+Telegram uses headings and compact application rows. Skips have a different
+status colour from completed backups. The usage bar appears only when both total
+and free capacity are known.
 
 **Read cloud space** runs this read-only command on the backup server:
 
