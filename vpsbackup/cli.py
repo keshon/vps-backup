@@ -114,12 +114,15 @@ def main(argv=None):
     if not arguments:
         path = Path("/etc/vps-backup/client.json")
         configured = False
-        if path.is_file():
-            try:
+        try:
+            if path.is_file():
                 configured = bool(onboarding.read_config(path).get("apps"))
-            except BackupError as exc:
-                print(presentation.error_text(str(exc), path), file=sys.stderr)
-                return 1
+        except PermissionError:
+            print("VPS Backup is installed. Its configuration is private to root.\n\nRun:\n  sudo vps-backup", file=sys.stderr)
+            return 1
+        except BackupError as exc:
+            print(presentation.error_text(str(exc), path), file=sys.stderr)
+            return 1
         print(presentation.welcome(path, configured))
         return 0
     args = parser().parse_args(arguments)

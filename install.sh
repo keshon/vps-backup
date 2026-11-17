@@ -137,7 +137,7 @@ wrapper_tmp=$(mktemp /usr/local/bin/.vps-backup.XXXXXXXX)
 cat > "$wrapper_tmp" <<'EOF'
 #!/bin/sh
 export PYTHONPATH=/usr/local/lib/vps-backup
-exec python3 -c 'from vpsbackup.cli import main; raise SystemExit(main())' "$@"
+exec python3 -c 'import sys; sys.path.insert(0, "/usr/local/lib/vps-backup"); from vpsbackup.cli import main; raise SystemExit(main())' "$@"
 EOF
 chmod 755 "$wrapper_tmp"
 PYTHONPATH="$source_dir" python3 - "$stage_dir" "$wrapper_tmp" "$command_name" "$config" <<'PY'

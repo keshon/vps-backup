@@ -168,6 +168,13 @@ class CLIExperienceTests(unittest.TestCase):
             self.assertEqual(cli.main(['cloud-space', '--json']), 0)
         self.assertEqual(json.loads(output.getvalue())['free_bytes'], 100)
 
+    def test_no_command_handles_private_config_without_a_traceback(self):
+        error = io.StringIO()
+        with patch.object(cli.Path, 'is_file', side_effect=PermissionError()), contextlib.redirect_stderr(error):
+            self.assertEqual(cli.main([]), 1)
+        self.assertIn('sudo vps-backup', error.getvalue())
+        self.assertNotIn('Traceback', error.getvalue())
+
 
 class InstallationTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'Uses Linux installation locking')
