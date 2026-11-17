@@ -13,7 +13,7 @@ import unittest
 import urllib.error
 import urllib.request
 
-from vpsbackup import client, server
+from vpsbackup import client, server, onboarding
 from vpsbackup.cli import restore
 from vpsbackup import recovery
 import tarfile
@@ -71,8 +71,11 @@ class GatewayRoundtrip(unittest.TestCase):
                                 time.sleep(0.05)
                         else:
                             self.fail("Gateway did not start")
-                        Path(bundle["state_dir"]).mkdir()
-                        client.restic(bundle, "init")
+                        configured = onboarding.setup_client(None, root / "client.json", source.parent)
+                        self.assertTrue(configured["ready"])
+                        resumed = onboarding.setup_client(None, root / "client.json", source.parent)
+                        self.assertTrue(resumed["ready"])
+                        self.assertEqual(private_json(root / "client.json")["repository_password"], bundle["repository_password"])
                         first = client.run(bundle)
                         self.assertEqual(first["status"], "success", first)
                         second = client.run(bundle)

@@ -21,13 +21,16 @@ database, restores the consistent copy and file bytes, and reads all data packs.
 It also exports a portable restic archive, backs up in native archive mode,
 checks that unchanged content reuses the saved archive, and exports its bytes.
 Unit tests cover invalid manifests, checksum failures and export cleanup after a
-disk-reserve failure. These checks are local commands; no CI workflow currently
-runs them automatically.
+disk-reserve failure. [Linux CI](../.github/workflows/tests.yml) installs and
+reinstalls the tool on a disposable runner and runs Python and notification tests.
+The setup tests cover interrupted initialization, wrong-key protection, copied
+bundles, malformed config, app-selection cancellation and CLI compatibility.
 The optional Node.js check executes the actual code embedded in the n8n template
 with fixtures. It checks completion/skip summaries, HTML escaping, message limits,
 capacity failures and credential-free independent notification branches. Node.js
 is needed for this development check, not for the VPS client.
-By default it never reads production configuration or connects to Koofr.
+The integration fixture never reads production configuration or connects to Koofr
+unless the explicit cloud-test variables below are supplied.
 An explicit cloud test can set `VPS_BACKUP_TEST_REMOTE` to a new
 `REMOTE:vps-backup-validation-*` prefix and `VPS_BACKUP_TEST_RCLONE_CONFIG` to
 the server's private config. This uploads random fixture bytes, not application

@@ -5,7 +5,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/vps-backup run
+ExecStart=/usr/local/bin/vps-backup backup --json
 UMask=0077
 Nice=10
 IOSchedulingClass=best-effort

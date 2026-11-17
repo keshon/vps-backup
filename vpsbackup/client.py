@@ -14,9 +14,11 @@ from .common import BackupError, ID, MIB, absolute, atomic_json, check_space, ex
 
 
 def validate_connection(config):
-    if config.get("version") != 1 or not ID.fullmatch(config.get("server_id", "")):
+    if config.get("version") != 1 or not isinstance(config.get("server_id"), str) or not ID.fullmatch(config["server_id"]):
         raise BackupError("Invalid config version or server_id")
     repository = config.get("repository", "")
+    if not isinstance(repository, str):
+        raise BackupError("repository must be a REST URL string from the recovery key")
     url = urlsplit(repository.removeprefix("rest:"))
     if not repository.startswith("rest:") or url.username or url.password or url.query or url.fragment:
         raise BackupError("Use a REST repository URL without embedded credentials")
@@ -27,7 +29,9 @@ def validate_connection(config):
     for key in ("repository_password", "rest_username", "rest_password"):
         if not isinstance(config.get(key), str) or not config[key]:
             raise BackupError("Missing " + key)
-    state = absolute(config.get("state_dir", ""), "state_dir")
+    if not isinstance(config.get("state_dir"), str):
+        raise BackupError("state_dir must be an absolute directory path")
+    absolute(config["state_dir"], "state_dir")
     reserve = config.get("reserve_mib", 512)
     if type(reserve) is not int or reserve < 64:
         raise BackupError("reserve_mib must be an integer >= 64")
@@ -40,24 +44,34 @@ def validate(config):
         raise BackupError("storage_mode must be restic or archive")
     state = Path(config["state_dir"])
     apps = config.get("apps", [])
+    if not isinstance(apps, list):
+        raise BackupError("apps must be a JSON array. Use vps-backup setup to select folders.")
     if not apps:
         raise BackupError("Configure at least one app")
     seen = set()
     roots = []
     for app in apps:
+        if not isinstance(app, dict):
+            raise BackupError("Each app must be a JSON object with id and path. Use vps-backup apps --select to choose folders.")
         name = app.get("id", "")
-        if not ID.fullmatch(name) or name in seen:
+        if not isinstance(name, str) or not ID.fullmatch(name) or name in seen:
             raise BackupError("App IDs must be unique lowercase identifiers")
         seen.add(name)
-        source = absolute(app.get("path", ""), "Source")
+        if not isinstance(app.get("path"), str):
+            raise BackupError("App " + name + " needs an absolute folder path in path")
+        source = absolute(app["path"], "Source")
         if overlaps(source, state) or any(overlaps(source, other) for other in roots):
             raise BackupError("Source directories must not overlap state or each other")
         roots.append(source)
+        if not isinstance(app.get("sqlite", []), list) or not all(isinstance(p, str) for p in app.get("sqlite", [])):
+            raise BackupError("sqlite must be an array of database paths for app " + name)
         for relative in app.get("sqlite", []):
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts or not path.parts:
                 raise BackupError("SQLite paths must be relative without parent traversal")
             absolute(str(source / path), "SQLite path")
+        if not isinstance(app.get("stop_containers", []), list):
+            raise BackupError("stop_containers must be an array of exact container names for app " + name)
         for container in app.get("stop_containers", []):
             if not isinstance(container, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", container):
                 raise BackupError("Invalid container name")
@@ -233,7 +247,7 @@ def recent_success(config, state, hours):
     return None
 
 
-def run(config, min_age_hours=0, force=False):
+def run(config, min_age_hours=0, force=False, *, progress=None):
     validate(config)
     if not math.isfinite(min_age_hours) or min_age_hours < 0:
         raise BackupError("Minimum age must be a finite number >= 0")
@@ -251,11 +265,16 @@ def run(config, min_age_hours=0, force=False):
                               reason="recent-success", last_success_at=saved["completed_at"])
                 return result
             result["space"] = doctor(config)
+            if progress:
+                progress("Local checks passed. Backing up " + str(len(config["apps"])) + " app(s).")
             work = state / "work"
             work.mkdir(mode=0o700)
             (work / "tmp").mkdir(mode=0o700)
             for app in config["apps"]:
                 item = {"id": app["id"], "status": "failed", "stage": "snapshot"}
+                if progress:
+                    progress(app["id"] + ": preparing consistent files" +
+                             (" (briefly stopping its configured containers)" if app.get("stop_containers") else ""))
                 result["apps"].append(item)
                 source = Path(app["path"])
                 snapshot_root = work / "sqlite" / app["id"]
@@ -276,6 +295,8 @@ def run(config, min_age_hours=0, force=False):
                     if app.get("sqlite"):
                         args += [str(snapshot_root)]
                 item["stage"] = "backup"
+                if progress:
+                    progress(app["id"] + ": uploading; any stopped containers have restarted")
                 if config.get("storage_mode") == "archive":
                     from . import archive
                     item.update(archive.save(config, app, source, snapshot_root))
@@ -291,6 +312,8 @@ def run(config, min_age_hours=0, force=False):
             result["stage"] = "check"
             # Check repository metadata after all app snapshots, without deleting anything.
             if config.get("storage_mode", "restic") == "restic":
+                if progress:
+                    progress("Uploads finished. Checking cloud metadata; this may take several minutes.")
                 restic(config, "check")
             result.update(status="success", stage="complete")
         except Exception as exc:

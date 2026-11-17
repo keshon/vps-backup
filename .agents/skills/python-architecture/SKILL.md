@@ -15,6 +15,8 @@ The current `vpsbackup` modules are responsibility boundaries. CLI parsing and
 presentation belong in `cli`; backup coordination and consistent source staging
 in `client`; native archive storage in `archive`; snapshot selection and portable
 export in `recovery`; gateway operations in `server`; schedules in `schedule`.
+Client setup and app selection belong in `onboarding`, runtime publication in
+`installation`, and terminal help and result formatting in `presentation`.
 Check current source before moving behavior; this map is navigation, not a demand
 for matching files in every feature.
 

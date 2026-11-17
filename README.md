@@ -14,15 +14,22 @@ Both modes handle SQLite copies, optional container stops, free-space checks,
 and temporary-file cleanup. Use n8n, a systemd timer, or manual commands.
 
 ```bash
-sudo vps-backup snapshots
+sudo bash install.sh
+sudo vps-backup backup
+sudo vps-backup list
 sudo vps-backup export --app melodix
 ```
+
+The installer asks for the recovery key from your backup server and which folders
+to include. Already installed? Run `vps-backup setup` to finish or retry setup.
+Use `vps-backup --help` for commands grouped by task.
 
 The export is a normal archive you can download and unpack. On your own
 computer, launch `recover.cmd` (Windows) or `sh recover.sh` (Linux) to choose a
 backup and save an archive. Both storage modes use the same helper.
 
 - [Set up a VPS and choose a schedule](docs/setup.md)
+- [Which command do I need?](docs/commands.md)
 - [Recover on Windows or Linux](docs/local-recovery.md)
 - [Import the n8n workflow](docs/n8n.md)
 - [Configuration and troubleshooting](docs/running.md)

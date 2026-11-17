@@ -35,7 +35,7 @@
         "resource": "command",
         "operation": "execute",
         "authentication": "privateKey",
-        "command": "/usr/local/bin/vps-backup run --min-age-hours 20",
+        "command": "/usr/local/bin/vps-backup backup --json --min-age-hours 20",
         "cwd": "/"
       }
     },

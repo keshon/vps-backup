@@ -5,16 +5,53 @@ umask 077
 role=client
 bundle=''
 enable_timer=0
-storage_mode=restic
+storage_mode=''
+config=''
+install_only=0
 command_name=vps-backup
+usage() {
+    cat <<'EOF'
+VPS Backup installer (Debian/Ubuntu)
+
+Start a client setup:
+  sudo bash install.sh
+  sudo bash install.sh --bundle /root/my-vps.bundle.json
+
+The recovery key is created on the BACKUP SERVER with:
+  vps-backup enroll --id my-vps
+Copy its .bundle.json to this VPS. You do not need to create client.json yourself.
+
+Options:
+  --role client|server         Client is the default; server installs the gateway tools
+  --bundle PATH                Existing recovery key for this VPS
+  --config PATH                Where to save client settings (default: /etc/vps-backup/client.json)
+  --storage-mode restic|archive Default: keep existing mode, or restic for a new client
+  --enable-timer               Enable a daily 06:00 systemd timer after setup succeeds
+  --install-only               Install/update commands now; configure later with vps-backup setup
+  --command-name NAME          Advanced: alternate command name for a server-only install
+  --help                      Show this guide
+
+Already installed? Run this installer again: it updates this tool and resumes setup.
+Configuration, recovery keys, schedules and the gateway binary are preserved.
+EOF
+}
+need_value() {
+    if [[ $# -lt 2 || -z $2 || $2 == --* ]]; then
+        printf 'error: %s needs a value.\nhelp: Run bash install.sh --help for examples.\n' "$1" >&2
+        exit 2
+    fi
+}
 while (($#)); do
     case "$1" in
-        --role) role=${2:?Missing role}; shift 2 ;;
-        --bundle) bundle=${2:?Missing enrollment bundle}; shift 2 ;;
-        --storage-mode) storage_mode=${2:?Missing storage mode}; shift 2 ;;
+        help|-h|--help) usage; exit 0 ;;
+        --role) need_value "$@"; role=$2; shift 2 ;;
+        --bundle) need_value "$@"; bundle=$2; shift 2 ;;
+        --config) need_value "$@"; config=$2; shift 2 ;;
+        --storage-mode) need_value "$@"; storage_mode=$2; shift 2 ;;
         --enable-timer) enable_timer=1; shift ;;
-        --command-name) command_name=${2:?Missing command name}; shift 2 ;;
-        *) printf 'Usage: bash install.sh [--role client|server] [--bundle /path/to/bundle] [--enable-timer] [--storage-mode restic|archive] [--command-name NAME]\n' >&2; exit 2 ;;
+        --install-only) install_only=1; shift ;;
+        --command-name) need_value "$@"; command_name=$2; shift 2 ;;
+        *) printf 'error: Unknown option: %s\nhelp: Run bash install.sh --help for examples.\n' "$1" >&2; exit 2 ;;
     esac
 done
 [[ $EUID == 0 ]] || { echo 'Run as root.' >&2; exit 1; }
@@ -22,13 +59,29 @@ done
 [[ $command_name =~ ^vps-backup(-[a-z0-9-]+)?$ ]] || { echo 'Invalid command name.' >&2; exit 1; }
 [[ $command_name == vps-backup || ( $role == server && -z $bundle && $enable_timer == 0 ) ]] || { echo 'Alternate command names are supported for server-only installs.' >&2; exit 1; }
 [[ -z $bundle || $role == client ]] || { echo '--bundle applies only to clients.' >&2; exit 1; }
-[[ $enable_timer == 0 || ( $role == client && -n $bundle ) ]] || { echo '--enable-timer requires --bundle on a new client.' >&2; exit 1; }
-[[ $storage_mode == restic || $storage_mode == archive ]] || { echo "Unknown storage mode." >&2; exit 1; }
+[[ $enable_timer == 0 || ( $role == client && $install_only == 0 ) ]] || { echo 'error: --enable-timer needs client setup. Remove --install-only and retry.' >&2; exit 1; }
+[[ -z $storage_mode || $storage_mode == restic || $storage_mode == archive ]] || { echo "Unknown storage mode." >&2; exit 1; }
 command -v apt-get >/dev/null || { echo 'This installer supports Debian/Ubuntu.' >&2; exit 1; }
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -f $source_dir/vpsbackup/cli.py ]] || { echo 'Download the complete source directory first.' >&2; exit 1; }
-[[ ! -e /usr/local/lib/vps-backup ]] || { echo 'Already installed; refusing to overwrite this version.' >&2; exit 1; }
-[[ ! -e /usr/local/bin/$command_name ]] || { echo "/usr/local/bin/$command_name already exists; refusing to overwrite." >&2; exit 1; }
+[[ -n $config ]] || config=/etc/vps-backup/$role.json
+[[ $config == /* ]] || { echo 'error: --config must be an absolute path, such as /etc/vps-backup/client.json.' >&2; exit 1; }
+if [[ -n $bundle && ! -f $bundle ]]; then
+    printf 'error: Recovery key not found: %s\nThe key must already exist; it is not the output config file.\nCreate it on the backup server with vps-backup enroll, copy it here, then retry.\n' "$bundle" >&2
+    exit 1
+fi
+if command -v python3 >/dev/null; then
+    PYTHONPATH="$source_dir" python3 - "$command_name" <<'PY'
+from pathlib import Path
+import sys
+from vpsbackup.installation import owned_install
+from vpsbackup.common import BackupError
+try:
+    owned_install(Path('/usr/local/lib/vps-backup'), Path('/usr/local/bin') / sys.argv[1])
+except BackupError as exc:
+    sys.exit('error: ' + str(exc))
+PY
+fi
 packages=(python3 restic ca-certificates)
 [[ $role != server ]] || packages+=(apache2-utils curl)
 apt-get update
@@ -45,7 +98,7 @@ trap cleanup EXIT
 cp -R -- "$source_dir/vpsbackup" "$stage_dir/"
 find "$stage_dir" -type d -exec chmod 755 {} +
 find "$stage_dir" -type f -exec chmod 644 {} +
-if [[ $role == server ]]; then
+if [[ $role == server && ! -x /usr/local/lib/vps-backup/bin/rclone ]]; then
     # Keep a pinned gateway binary separate from rclone used by existing jobs.
     machine=$(uname -m)
     case "$machine" in
@@ -87,18 +140,38 @@ export PYTHONPATH=/usr/local/lib/vps-backup
 exec python3 -c 'from vpsbackup.cli import main; raise SystemExit(main())' "$@"
 EOF
 chmod 755 "$wrapper_tmp"
-mv -T -- "$stage_dir" /usr/local/lib/vps-backup
+PYTHONPATH="$source_dir" python3 - "$stage_dir" "$wrapper_tmp" "$command_name" "$config" <<'PY'
+from pathlib import Path
+import sys
+from vpsbackup.installation import publish
+from vpsbackup.common import BackupError
+try:
+    result = publish(Path(sys.argv[1]), Path(sys.argv[2]), Path('/usr/local/lib/vps-backup'),
+                     Path('/usr/local/bin') / sys.argv[3], Path(sys.argv[4]), Path('/var/lib/vps-backup'))
+except BackupError as exc:
+    sys.exit('error: ' + str(exc) + '\nhelp: If a backup is running, wait for it to finish and retry.')
+print('Commands updated.' if result['updated'] else 'Commands installed.')
+if result['previous_runtime']:
+    print('Previous runtime kept at: ' + result['previous_runtime'])
+PY
 stage_dir=''
-mv -T -- "$wrapper_tmp" "/usr/local/bin/$command_name"
 wrapper_tmp=''
 install -d -m 700 /etc/vps-backup /var/lib/vps-backup
-if [[ -n $bundle ]]; then
-    [[ $role == client ]] || { echo '--bundle applies only to clients.' >&2; exit 1; }
-    /usr/local/bin/vps-backup setup-client --bundle "$bundle" --initialize --storage-mode "$storage_mode"
+if [[ $role == client && $install_only == 0 ]]; then
+    setup_args=(setup --config "$config")
+    [[ -z $bundle ]] || setup_args+=(--bundle "$bundle")
+    [[ -z $storage_mode ]] || setup_args+=(--storage-mode "$storage_mode")
+    if ! /usr/local/bin/vps-backup "${setup_args[@]}"; then
+        printf '\nThe command is installed. Setup is unfinished; no reinstall is needed.\nResume with:\n  vps-backup setup --config %q\n' "$config" >&2
+        exit 1
+    fi
+    if ((enable_timer)); then
+        /usr/local/bin/vps-backup schedule --config "$config" --mode systemd
+    else
+        printf '\nScheduling was not changed. Back up now with: vps-backup backup\n'
+    fi
+elif [[ $role == client ]]; then
+    printf 'Setup is still needed. Run: vps-backup setup --config %q\n' "$config"
+else
+    printf 'Gateway commands are ready. Next: %s setup-server --help\n' "$command_name"
 fi
-if ((enable_timer)); then
-    [[ $role == client && -f /etc/vps-backup/client.json ]] || { echo 'Timer requires a configured client.' >&2; exit 1; }
-    /usr/local/bin/vps-backup doctor
-    /usr/local/bin/vps-backup schedule --mode systemd
-fi
-printf 'Installed %s. Timer enabled: %s. Gateway start is a separate step.\n' "$role" "$enable_timer"

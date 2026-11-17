@@ -47,8 +47,12 @@ The rclone binary's SHA256 is recorded only after its local behavior audit
 passes; serving refuses a different binary. A successful fixture audit is not
 a security certification of the binary or remote backend.
 
-`cli.py` owns setup and command presentation, including JSON results for automation
-and readable snapshot tables. No credential values are printed
+`onboarding.py` owns recovery-key import, consistent app selection and resumable
+client setup. `installation.py` publishes runtime updates under the client lock,
+preserves the gateway binary, and restores the old runtime if publication fails.
+`cli.py` owns parsing and dispatch; `presentation.py` owns grouped help, actionable
+diagnostics and terminal summaries. Non-terminal operational output keeps the
+JSON contract used by automation. No credential values are printed
 in normal results. Subprocesses receive restic secrets in environment variables,
 not command arguments. The client clears inherited restic/rclone overrides.
 Configuration and diagnostic files are private to root.

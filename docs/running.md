@@ -100,10 +100,11 @@ are not automatically classified. Review Docker mounts against the selected
 paths; discovery is a proposal, not a guarantee of complete coverage.
 
 Installation saves `/etc/vps-backup/client.json` privately and initializes the
-remote repository in restic mode. It refuses to overwrite an existing client configuration or
-repository. For automation, `setup-client --apps-file /root/apps.json` accepts
+remote repository in restic mode. Retrying setup reuses the existing settings and
+opens the repository if it already exists. It never replaces a different recovery
+key. For automation, `setup --apps-file /root/apps.json` accepts
 an explicitly reviewed JSON app array; that input file must also have mode 600.
-Use `--base /another/parent` with `setup-client` to change discovery's root.
+Use `--base /another/parent` with `setup` to change discovery's root.
 
 An app configuration looks like:
 
@@ -132,30 +133,32 @@ name. Do not enable both sets of timers.
 ## Ordinary commands
 
 ```bash
-sudo vps-backup doctor
-sudo vps-backup run
+sudo vps-backup preflight
+sudo vps-backup backup
 sudo vps-backup status
-sudo vps-backup snapshots
-sudo vps-backup check --read-data
+sudo vps-backup list
+sudo vps-backup verify --read-data
 ```
 
-`doctor` checks local configuration, required sources, SQLite sizes, and space;
-it makes no cloud requests. In restic mode, `run` saves one snapshot per app, then checks
+`preflight` checks local configuration, required sources, SQLite sizes, and space;
+it makes no cloud requests. In restic mode, `backup` saves one snapshot per app, then checks
 repository metadata. In archive mode, each newly uploaded archive and manifest
 is read back and checksum-verified before success is recorded. Unchanged apps
 reuse their previous archive after checking that object's size and presence.
 All requested apps and the mode's checks must succeed
 for exit code 0. `status` reads the last saved result. An interrupted run may
 already have saved some app snapshots; there is no whole-server transaction.
-`check --read-data` downloads and verifies all stored packs and is more expensive
-than the metadata check. Archive-mode `check` always downloads and verifies all
+`verify --read-data` downloads and verifies all stored packs and is more expensive
+than the metadata check. Archive-mode `verify` always downloads and verifies all
 archives, even without `--read-data`. Backups never invoke `forget`, `prune`, or cloud delete.
 
-`snapshots` displays a table; use `snapshots --json` for machine output.
+`list` displays a table; use `list --json` for machine output.
 `export --app APP_ID --to /path/app.tar.gz` produces a normal archive in either
 mode. Add `--snapshot HEX_ID` to choose an older backup and `--json` for a machine
 result. See [local recovery](local-recovery.md) to do this on your computer.
-`run`, `status` and other operational commands retain JSON output for n8n.
+Terminal output uses readable summaries. Pass `--json` for scripts; non-terminal
+operational output remains JSON for existing n8n jobs. The command reference
+explains [status versus verification and compatibility names](commands.md).
 
 ## Disk use and interrupted runs
 
@@ -184,8 +187,8 @@ without checking those containers.
 ## Scheduling and n8n
 
 [Setup examples](setup.md#n8n-only) cover n8n, systemd, and fallback schedules.
-`run --min-age-hours N` skips after a successful backup of the same configured
-apps, storage mode and repository within N hours. A plain `run` defaults to zero and always
+`backup --min-age-hours N` skips after a successful backup of the same configured
+apps, storage mode and repository within N hours. A plain `backup` defaults to zero and always
 attempts a backup; `--force` bypasses an explicit guard.
 The check happens under the lock, after interrupted-run recovery and cleanup.
 A skip returns exit 0, `status: "success"`, `stage: "skipped"`, and `skipped: true`.
@@ -213,7 +216,7 @@ stderr from the failed command. It can include private paths and is not sent
 to n8n. It remains until a later failure replaces it, so compare it with the
 current saved run. Timeouts and launch failures have no stderr log.
 
-For insufficient disk space, check `doctor` and the filesystem's current use.
+For insufficient disk space, run `preflight` and check the filesystem's current use.
 Do not remove cloud snapshots to solve a target's scratch-space problem.
 For gateway errors, inspect `journalctl -u vps-backup-gateway` on the server and
 verify its HTTPS route and provider access. The gateway's private temporary

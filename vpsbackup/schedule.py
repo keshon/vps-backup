@@ -31,7 +31,7 @@ def configure(config_path, mode, calendar, min_age_hours, command=None):
     if not calendar or any(c in calendar for c in "\n\r\x00%"):
         raise BackupError("Invalid systemd calendar")
     execute(["systemd-analyze", "calendar", calendar], timeout=30)
-    args = [str(command), "--config", str(config_path), "run", "--min-age-hours", str(min_age_hours)]
+    args = [str(command), "--config", str(config_path), "backup", "--json", "--min-age-hours", str(min_age_hours)]
     folder = UNIT_DIRECTORY
     service = folder / (UNIT + ".service")
     timer = folder / (UNIT + ".timer")

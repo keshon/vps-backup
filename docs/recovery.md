@@ -10,7 +10,7 @@ password. An enrollment bundle has no Koofr credentials.
 The simplest test works in both modes:
 
 ```bash
-sudo vps-backup snapshots
+sudo vps-backup list
 sudo vps-backup export --app melodix --to /var/tmp/melodix-review.tar.gz
 mkdir /var/tmp/restore-review
 tar -xzf /var/tmp/melodix-review.tar.gz -C /var/tmp/restore-review
@@ -26,7 +26,7 @@ use [the local helper](local-recovery.md).
 On a configured client:
 
 ```bash
-sudo vps-backup snapshots
+sudo vps-backup list
 sudo vps-backup restore --snapshot EXPLICIT_HEX_ID --to /var/tmp/restore-review
 ```
 
@@ -74,8 +74,9 @@ separate directory. Do not reinitialize an existing repository.
 
 ## Migration from the old runner
 
-The installer refuses to overwrite `/usr/local/bin/vps-backup`. If a previous
-runner occupies this path, preserve its source, configuration, state, and
+The installer updates recognized installations of this tool. If a different
+runner occupies `/usr/local/bin/vps-backup`, it refuses to overwrite it. Preserve
+that runner's source, configuration, state, and
 pending archives before arranging a
 replacement. Preserve the old runtime and pending queue in a separate private
 directory before installing the new tool at the standard paths.

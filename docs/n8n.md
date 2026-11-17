@@ -15,13 +15,13 @@ format; n8n only connects through SSH and runs the client.
 The example runs Wednesdays at 05:00 Moscow time. Its SSH command is:
 
 ```bash
-/usr/local/bin/vps-backup --config /etc/vps-backup/client.json run --min-age-hours 20
+/usr/local/bin/vps-backup --config /etc/vps-backup/client.json backup --json --min-age-hours 20
 ```
 
 The validation node requires SSH exit code 0 and JSON `status: "success"`.
 Skipping a recent successful backup counts as success. Backup failures fail the workflow;
 completion notifications only follow a successful result. The manual trigger uses the same recent-success
-guard. To force another backup, run `sudo vps-backup run --force` on the VPS.
+guard. To force another backup, run `sudo vps-backup backup --force` on the VPS.
 
 For the commands to disable the local timer or add a systemd fallback, see
 [the scheduling examples](setup.md#n8n-only). Changing the workflow does not change
