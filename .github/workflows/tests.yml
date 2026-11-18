@@ -1,35 +1,25 @@
 name: Tests
-on:
-  push:
-  pull_request:
+on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  linux:
-    runs-on: ubuntu-24.04
+  go:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-go@v5
         with:
-          python-version: '3.10'
-      - name: Check installer help and syntax
-        run: |
-          bash -n install.sh
-          sh -n recover.sh
-          bash install.sh help
-          bash install.sh --help
-          if bash install.sh --bundle; then exit 1; fi
-          if sudo bash install.sh --bundle /does-not-exist.bundle.json; then exit 1; fi
-      - name: Install and repeat installation on the disposable runner
-        run: |
-          sudo bash install.sh --role server --install-only
-          sudo bash install.sh --install-only
-          /usr/local/bin/vps-backup --help
-          sudo /usr/local/bin/vps-backup
-      - name: Run Python tests including the real gateway roundtrip
-        run: |
-          export PATH=/usr/local/lib/vps-backup/bin:$PATH
-          python -m unittest discover -s tests -v
-          python -m compileall -q vpsbackup recover.py
-      - name: Check notification summaries
-        run: node --test tests/test_notifications.cjs
+          go-version-file: go.mod
+      - name: Install rclone for disposable local integration tests
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rclone
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build -o dist/ ./cmd/vps-backup
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vps-backup-${{ runner.os }}
+          path: dist/*

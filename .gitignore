@@ -3,6 +3,9 @@ __pycache__/
 .test-tmp/
 .venv/
 dist/
+tmp/
+*.exe
+config.json
 *.bundle.json
 docs/deployment.local.md
 .env

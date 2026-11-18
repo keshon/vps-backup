@@ -1,17 +1,20 @@
 # Working in this repository
 
-Use the project-local skills when they apply:
+This is a Go terminal application. Keep backup operations in `internal/backup`
+and application interaction in `internal/tui`. Gektor's copied controls live in
+`internal/tui/components`; they must not import backup logic or persistence.
+Preserve their tests and record any changes beyond module import paths.
 
-- Python implementation or review: [.agents/skills/python-style/SKILL.md](.agents/skills/python-style/SKILL.md).
-- Module boundaries, ownership or refactoring: [.agents/skills/python-architecture/SKILL.md](.agents/skills/python-architecture/SKILL.md).
-- Documentation structure: [.agents/skills/docs-pattern/SKILL.md](.agents/skills/docs-pattern/SKILL.md).
+Use [.agents/skills/go-style/SKILL.md](.agents/skills/go-style/SKILL.md) and
+[.agents/skills/go-architecture/SKILL.md](.agents/skills/go-architecture/SKILL.md),
+copied from Melodix. Run gofmt, go vet, and go test
+on changed packages; use the race detector when changing asynchronous work.
+Tests use temporary folders and fake command boundaries, never live containers
+or production clouds. Keep credentials out of configuration, results and logs.
 
-Read [docs/conventions.md](docs/conventions.md) for development checks and backup
-invariants. The backup client and gateway run on Linux; the local recovery tool
-also runs on Windows. Keep recovery imports usable without Linux-only modules.
-The project uses the Python standard library; restic, rclone and Docker are
-external programs, not Python dependencies.
+No services, timers, REST gateway or Python runtime. Archive operations must
+release their local OS lock, restart only previously running containers, and
+finish cleanup before reporting completion or letting the TUI quit.
 
-Use fixtures and temporary repositories for ordinary validation. Production
-configuration, cloud credentials, recovery bundles and exported application data
-must stay outside commits. A local test does not authorize a production deployment.
+The old implementation is retained in the Git tag
+`archive/python-before-go-2026-11-18`. Do not alter ignored operator files or tmp/.

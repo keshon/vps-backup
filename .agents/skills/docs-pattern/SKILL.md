@@ -103,18 +103,17 @@ restating them in several places.
 5. Report which repositories changed, substantive corrections and validation.
    Commit, push and deployment follow the user's authorization for this task.
 
-## This repository
+For Melodix specifically, edit `README.md.tmpl` and run `go run ./cmd/readme`.
+`internal/conventions` reads convention tags, configuration tables and ownership
+test references; preserve their contracts. These are reference-project details,
+not requirements to add the same machinery to another repository.
 
-Use `docs/setup.md` for the short installation path and `docs/running.md` for
-configuration and routine operations. Keep local recovery, n8n orchestration and
-Traefik routing in their specialist guides. Link those guides from the README;
-avoid repeating complete setup commands in several places.
+## Repository copies
 
-Verify examples against the Python CLI and installer. This project has no
-Melodix README generator or Go convention checks. Development checks belong in
-`docs/conventions.md`; do not imply that local checks run in CI unless a workflow
-actually runs them. Explain restic and archive mode behavior where it differs,
-while keeping shared app setup and scheduling instructions in one place.
-
-This project-local copy is self-contained. Comparing the Melodix reference does
-not authorize edits to Melodix or propagation to other repositories.
+This skill is versioned at `.agents/skills/docs-pattern/SKILL.md` in Melodix,
+Server Domme and 3xui-reality-stack. Melodix is the reference copy for shared
+pattern changes. When authorized to propagate a revision, compare the copies
+and carry the same shared text into the named repositories. Project-specific
+commands and checks belong in each repository's `docs/conventions.md`.
+Do not depend on a machine-local installed skill or an absolute local path.
+A personal installation is an optional convenience copy.
