@@ -1,0 +1,237 @@
+{
+  "name": "VPS Backup — Go archives",
+  "active": false,
+  "nodes": [
+    {
+      "id": "592b6ac2-c178-4178-ab8c-6b371c5e7263",
+      "name": "Wednesday 05:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e4228494-cf19-4fb9-81d2-de1cba7ca651",
+      "name": "Run backup",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ (() => { const value = $('Settings').first().json.rcloneConfigBase64; if (typeof value !== 'string' || !/^[A-Za-z0-9+/=\\s]+$/.test(value) || !value.trim()) throw new Error('Set rcloneConfigBase64 in Settings before running.'); const config = value.replace(/\\s/g, ''); return \"RCLONE_CONFIG_CONTENT='\" + config + \"' /opt/scripts/vps-backup/vps-backup --run --config /root/.config/vps-backup/config.json\"; })() }}",
+        "cwd": "/opt/scripts/vps-backup"
+      },
+      "notes": "Select the target VPS SSH credential. Adjust binary and config paths. Use the same Linux user that saved the settings; container stops need Docker access."
+    },
+    {
+      "id": "386f8b8f-7a5e-421a-b780-d45af1a0a86b",
+      "name": "Validate backup result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const ssh = $input.first().json;\nif (ssh.code !== 0) throw new Error('Backup SSH command failed; inspect execution and target status');\nlet result;\ntry { result = JSON.parse(ssh.stdout); } catch { throw new Error('Backup returned invalid JSON'); }\nif (result.status !== 'success') throw new Error('Backup failed; inspect target status');\nreturn [{ json: result }];"
+      }
+    },
+    {
+      "id": "20dcce09-e990-4cbb-b889-a8e79ff9f03c",
+      "name": "Manual backup",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Format backup summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const result = $input.first().json;\nif (result.status !== 'success') throw new Error('Backup did not complete successfully');\nconst clean = value => String(value ?? '').replace(/[\\r\\n\\x00-\\x1f]/g, ' ').replace(/@/g, '＠').replace(/[`*_~|<>]/g, '').slice(0, 100);\nconst html = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst bytes = value => {\n  if (!Number.isFinite(value) || value < 0) return 'unknown';\n  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];\n  const index = Math.min(Math.floor(Math.log(Math.max(value, 1)) / Math.log(1024)), units.length - 1);\n  return (value / 1024 ** index).toFixed(index ? 1 : 0) + ' ' + units[index];\n};\nconst apps = Array.isArray(result.apps) ? result.apps : [];\nconst saved = apps.filter(app => !app.unchanged);\nconst uploaded = bytes(saved.reduce((sum, app) => sum + app.data_added, 0));\nconst server = clean(result.server_id);\nconst description = saved.length + ' saved · ' + (apps.length - saved.length) + ' unchanged';\nconst appLines = apps.slice(0, 7).map(app => clean(app.id).slice(0, 50) + ' · ' + (app.unchanged ? 'unchanged' : bytes(app.data_added)) + '\\n' + clean(app.archive).slice(0, 80));\nif (apps.length > 7) appLines.push('+ ' + (apps.length - 7) + ' more in the execution');\nconst timestamp = new Date(result.finished).toISOString();\nconst title = '✓ Backup complete';\nconst fields = [\n  { name: 'Server', value: server, inline: true },\n  { name: 'Uploaded', value: uploaded, inline: true },\n];\nif (appLines.length) fields.push({ name: 'Applications', value: appLines.join('\\n'), inline: false });\nconst discordEmbed = { title, description, color: 3066993, fields,\n  footer: { text: 'VPS Backup · Run #' + clean($execution.id) }, timestamp };\nconst telegramMessage = ['<b>' + title + '</b>', '<code>' + html(server) + '</code>',\n  '', html(description), '<b>Uploaded</b>  ' + uploaded,\n  '<pre>' + html(appLines.join('\\n')) + '</pre>',\n  '<i>' + html(timestamp) + ' · Run #' + html(clean($execution.id)) + '</i>'].join('\\n');\nreturn [{ json: { discordEmbed, telegramMessage, server_id: result.server_id } }];"
+      },
+      "id": "5f6086ae-7029-46f6-ba8d-f354c1a074ed"
+    },
+    {
+      "name": "Discord",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        0
+      ],
+      "parameters": {
+        "authentication": "webhook",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "inputMethod": "json",
+              "json": "={{ JSON.stringify($json.discordEmbed) }}"
+            }
+          ]
+        }
+      },
+      "disabled": true,
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "id": "8e3615fd-65d2-447e-a00b-d9be01aabad2"
+    },
+    {
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        224
+      ],
+      "disabled": true,
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "notes": "Add a Telegram bot credential and chat ID, then enable this node. Disable Discord or Telegram independently.",
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "id": "88862518-5bc1-4b44-91cf-18db3fb15108"
+    },
+    {
+      "id": "archive-settings",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        112,
+        -128
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rclone-config",
+              "name": "rcloneConfigBase64",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "Paste your base64 rclone INI here after import, including union upstreams. Base64 is not encryption. This value and the resolved SSH command may be retained in n8n execution records. Never commit a filled export."
+    }
+  ],
+  "connections": {
+    "Wednesday 05:00": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run backup": {
+      "main": [
+        [
+          {
+            "node": "Validate backup result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual backup": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate backup result": {
+      "main": [
+        [
+          {
+            "node": "Format backup summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format backup summary": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Run backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Moscow",
+    "executionOrder": "v1",
+    "executionTimeout": 3600
+  }
+}

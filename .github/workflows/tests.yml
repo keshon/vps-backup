@@ -16,6 +16,10 @@ jobs:
       - name: Install rclone for disposable local integration tests
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rclone
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test n8n/workflow.test.cjs
       - run: go vet ./...
       - run: go test -race ./...
       - run: go build -o dist/ ./cmd/vps-backup
